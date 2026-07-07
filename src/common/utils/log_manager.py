@@ -5,7 +5,7 @@ import os
 import sys
 import threading
 import time
-from .config_manager import cfg
+from common.utils import cfg
 from collections import deque
 from typing import Optional
 
