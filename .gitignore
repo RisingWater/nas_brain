@@ -3,3 +3,5 @@ __pycache__
 .env
 data
 logs
+node_modules
+dist

@@ -99,22 +99,33 @@ class UserRepository:
             "is_temp": bool(row[3]),
         }
     
-    def list_users(self, user_type: str = None, limit: int = 100, offset: int = 0) -> List[Dict]:
+    def list_users(self, user_type: str = None, keyword: str = None,
+                   is_active: bool = None, limit: int = 100, offset: int = 0) -> List[Dict]:
         conn = self._get_conn()
-        if user_type:
-            cursor = conn.execute(
-                """SELECT user_id, display_name, user_type, wechat_name, is_temp, created_at
-                   FROM users WHERE is_active = 1 AND user_type = ? 
-                   ORDER BY created_at DESC LIMIT ? OFFSET ?""",
-                (user_type, limit, offset)
-            )
+        conditions = []
+        params = []
+
+        if is_active is not None:
+            conditions.append("is_active = ?")
+            params.append(1 if is_active else 0)
         else:
-            cursor = conn.execute(
-                """SELECT user_id, display_name, user_type, wechat_name, is_temp, created_at
-                   FROM users WHERE is_active = 1 
-                   ORDER BY created_at DESC LIMIT ? OFFSET ?""",
-                (limit, offset)
-            )
+            conditions.append("is_active = 1")
+
+        if user_type:
+            conditions.append("user_type = ?")
+            params.append(user_type)
+        if keyword:
+            conditions.append("(display_name LIKE ? OR wechat_name LIKE ?)")
+            kw = f"%{keyword}%"
+            params.extend([kw, kw])
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        cursor = conn.execute(
+            f"""SELECT user_id, display_name, user_type, wechat_name, is_temp, created_at
+                FROM users WHERE {where_clause}
+                ORDER BY created_at DESC LIMIT ? OFFSET ?""",
+            (*params, limit, offset)
+        )
         return [
             {
                 "user_id": row[0],

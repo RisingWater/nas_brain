@@ -1,32 +1,10 @@
 # db_services/routes/users.py
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
+from ..schema.user_schema import AddUserRequest, UpdateUserRequest, UserResponse, ListUsersResponse
 from ..repositories.user_repository import user_repo
 
 router = APIRouter()
-
-class AddUserRequest(BaseModel):
-    display_name: str = Field(..., min_length=1)
-    user_type: str = Field("person")
-    wechat_name: Optional[str] = None
-    is_temp: bool = False
-
-
-class UpdateUserRequest(BaseModel):
-    display_name: Optional[str] = None
-    wechat_name: Optional[str] = None
-    is_temp: Optional[bool] = None
-
-
-class UserResponse(BaseModel):
-    user_id: str
-    display_name: str
-    user_type: str
-    wechat_name: Optional[str]
-    is_temp: bool
-    created_at: Optional[str] = None
-    is_active: Optional[bool] = None
 
 
 @router.post("", status_code=201)
@@ -59,15 +37,25 @@ async def get_user_by_wechat(wechat_name: str = Query(..., min_length=1)):
     return UserResponse(**user)
 
 
-@router.get("")
+@router.get("", response_model=ListUsersResponse)
 async def list_users(
     user_type: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None, description="搜索 display_name 或 wechat_name"),
+    is_active: Optional[bool] = Query(None),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0)
 ):
-    users = user_repo.list_users(user_type=user_type, limit=limit, offset=offset)
-    all_users = user_repo.list_users(user_type=user_type)
-    return {"total": len(all_users), "users": [UserResponse(**u) for u in users]}
+    users = user_repo.list_users(
+        user_type=user_type, keyword=keyword,
+        is_active=is_active, limit=limit, offset=offset
+    )
+    all_users = user_repo.list_users(
+        user_type=user_type, keyword=keyword, is_active=is_active
+    )
+    return ListUsersResponse(
+        total=len(all_users),
+        users=[UserResponse(**u) for u in users]
+    )
 
 
 @router.put("/{user_id}")
