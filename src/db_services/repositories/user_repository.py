@@ -1,10 +1,8 @@
-# src/common/db/user_repository.py
+# db_services/repositories/user_repository.py
 import sqlite3
 import uuid
 import threading
 from typing import Optional, Dict, List
-from datetime import datetime
-from common.utils import cfg
 from ..db_connection import db
 
 
@@ -27,17 +25,13 @@ class UserRepository:
         return cls()
     
     def _init(self):
-        """初始化时创建表"""
         self._init_db()
     
     def _get_conn(self) -> sqlite3.Connection:
-        """获取单例连接"""
         return db.get_connection()
     
     def _init_db(self):
-        """初始化时创建表"""
         conn = self._get_conn()
-        # 用户表
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,15 +49,9 @@ class UserRepository:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_name ON users(wechat_name)")
         conn.commit()
     
-    # ============================================================
-    # 用户 CRUD
-    # ============================================================
-    
     def add_user(self, display_name: str, user_type: str = "person",
                  wechat_name: str = None, is_temp: bool = False) -> str:
-        """添加用户，返回 user_id"""
         user_id = f"u_{uuid.uuid4().hex[:8]}" if not is_temp else f"u_temp_{uuid.uuid4().hex[:8]}"
-        
         conn = self._get_conn()
         conn.execute(
             """INSERT INTO users 
@@ -72,11 +60,9 @@ class UserRepository:
             (user_id, display_name, user_type, wechat_name, 1 if is_temp else 0)
         )
         conn.commit()
-        
         return user_id
     
     def get_user(self, user_id: str) -> Optional[Dict]:
-        """根据 user_id 获取用户"""
         conn = self._get_conn()
         cursor = conn.execute(
             """SELECT user_id, display_name, user_type, wechat_name, is_temp, created_at, is_active
@@ -97,7 +83,6 @@ class UserRepository:
         }
     
     def get_user_by_wechat(self, wechat_name: str) -> Optional[Dict]:
-        """根据微信名获取用户"""
         conn = self._get_conn()
         cursor = conn.execute(
             """SELECT user_id, display_name, user_type, is_temp 
@@ -115,7 +100,6 @@ class UserRepository:
         }
     
     def list_users(self, user_type: str = None, limit: int = 100, offset: int = 0) -> List[Dict]:
-        """列出用户"""
         conn = self._get_conn()
         if user_type:
             cursor = conn.execute(
@@ -145,10 +129,8 @@ class UserRepository:
     
     def update_user(self, user_id: str, display_name: str = None,
                     wechat_name: str = None, is_temp: bool = None) -> bool:
-        """更新用户信息"""
         fields = []
         values = []
-        
         if display_name is not None:
             fields.append("display_name = ?")
             values.append(display_name)
@@ -158,12 +140,9 @@ class UserRepository:
         if is_temp is not None:
             fields.append("is_temp = ?")
             values.append(1 if is_temp else 0)
-        
         if not fields:
             return True
-        
         values.append(user_id)
-        
         conn = self._get_conn()
         conn.execute(
             f"UPDATE users SET {', '.join(fields)}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND is_active = 1",
@@ -173,10 +152,7 @@ class UserRepository:
         return conn.total_changes > 0
     
     def delete_user(self, user_id: str) -> bool:
-        """删除用户：临时用户硬删除，正式用户软删除"""
         conn = self._get_conn()
-        
-        # 先查是不是临时用户
         cursor = conn.execute(
             "SELECT is_temp FROM users WHERE user_id = ? AND is_active = 1",
             (user_id,)
@@ -184,9 +160,7 @@ class UserRepository:
         row = cursor.fetchone()
         if not row:
             return False
-        
         is_temp = bool(row[0])
-        
         if is_temp:
             conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
         else:
