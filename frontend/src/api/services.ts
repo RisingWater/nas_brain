@@ -15,3 +15,8 @@ export async function stopService(name: string): Promise<ServiceActionResponse> 
   const res = await client.post<ServiceActionResponse>(`/services/${name}/stop`);
   return res.data;
 }
+
+export async function restartService(name: string): Promise<ServiceActionResponse> {
+  const res = await client.post<ServiceActionResponse>(`/services/${name}/restart`);
+  return res.data;
+}

@@ -3,10 +3,10 @@ import {
   Table, Button, Tag, Card, Row, Col, Space, message, Typography,
 } from 'antd';
 import {
-  PlayCircleOutlined, StopOutlined, ReloadOutlined,
+  PlayCircleOutlined, StopOutlined, ReloadOutlined, RestOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { listServices, startService, stopService } from '../api/services';
+import { listServices, startService, stopService, restartService } from '../api/services';
 import type { ServiceInfo } from '../types/service';
 
 const { Title, Text } = Typography;
@@ -40,29 +40,38 @@ export default function ServiceManager() {
     return () => clearInterval(polling.current);
   }, [fetchServices]);
 
-  const handleStart = async (name: string) => {
+  const withOp = (name: string, fn: () => Promise<any>) => {
     setOperating(name);
+    fn().finally(() => setOperating(null));
+  };
+
+  const handleStart = async (name: string) => {
     try {
       const res = await startService(name);
       message.success(res.message);
       await fetchServices();
     } catch {
       message.error(`启动 ${name} 失败`);
-    } finally {
-      setOperating(null);
     }
   };
 
   const handleStop = async (name: string) => {
-    setOperating(name);
     try {
       const res = await stopService(name);
       message.success(res.message);
       await fetchServices();
     } catch {
       message.error(`停止 ${name} 失败`);
-    } finally {
-      setOperating(null);
+    }
+  };
+
+  const handleRestart = async (name: string) => {
+    try {
+      const res = await restartService(name);
+      message.success(res.message);
+      await fetchServices();
+    } catch {
+      message.error(`重启 ${name} 失败`);
     }
   };
 
@@ -83,22 +92,24 @@ export default function ServiceManager() {
     { title: 'PID', dataIndex: 'pid', key: 'pid', width: 80, responsive: ['sm' as const],
       render: (pid: number | null) => pid ?? '-' },
     {
-      title: '操作', key: 'action', width: 140,
+      title: '操作', key: 'action', width: 200,
       render: (_, record) => (
         <Space>
           {record.status === 'running' ? (
-            <Button
-              size="small" danger icon={<StopOutlined />}
+            <Button size="small" danger icon={<StopOutlined />}
               loading={operating === record.name}
-              onClick={() => handleStop(record.name)}
+              onClick={() => withOp(record.name, () => handleStop(record.name))}
             >{isMobile ? '' : '停止'}</Button>
           ) : (
-            <Button
-              size="small" type="primary" icon={<PlayCircleOutlined />}
+            <Button size="small" type="primary" icon={<PlayCircleOutlined />}
               loading={operating === record.name}
-              onClick={() => handleStart(record.name)}
+              onClick={() => withOp(record.name, () => handleStart(record.name))}
             >{isMobile ? '' : '启动'}</Button>
           )}
+          <Button size="small" icon={<RestOutlined />}
+            loading={operating === record.name}
+            onClick={() => withOp(record.name, () => handleRestart(record.name))}
+          >{isMobile ? '' : '重启'}</Button>
         </Space>
       ),
     },
@@ -121,8 +132,9 @@ export default function ServiceManager() {
                 size="small"
                 actions={[
                   svc.status === 'running'
-                    ? <StopOutlined key="stop" onClick={() => handleStop(svc.name)} style={{ color: '#ff4d4f' }} />
-                    : <PlayCircleOutlined key="start" onClick={() => handleStart(svc.name)} style={{ color: '#52c41a' }} />,
+                    ? <StopOutlined key="stop" onClick={() => withOp(svc.name, () => handleStop(svc.name))} style={{ color: '#ff4d4f' }} />
+                    : <PlayCircleOutlined key="start" onClick={() => withOp(svc.name, () => handleStart(svc.name))} style={{ color: '#52c41a' }} />,
+                  <RestOutlined key="restart" onClick={() => withOp(svc.name, () => handleRestart(svc.name))} />,
                 ]}
               >
                 <Row justify="space-between" align="middle">

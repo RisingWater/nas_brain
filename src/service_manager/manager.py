@@ -110,6 +110,14 @@ class ServiceManager:
             return False
         return self._stop_one(svc)
 
+    def restart(self, name: str) -> bool:
+        """重启指定服务"""
+        svc = self._services.get(name)
+        if not svc:
+            return False
+        self._stop_one(svc)
+        return self._start_one(svc)
+
     # ---- 内部 ----
 
     def _start_one(self, svc: ServiceInfo) -> bool:
