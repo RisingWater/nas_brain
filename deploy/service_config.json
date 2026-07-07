@@ -1,0 +1,12 @@
+[
+  {
+    "name": "db_services",
+    "description": "数据库微服务",
+    "command": "python -m uvicorn src.db_services.app:app --host 0.0.0.0 --port 9021"
+  },
+  {
+    "name": "web_services",
+    "description": "管理后端微服务",
+    "command": "python -m uvicorn src.web_services.app:app --host 0.0.0.0 --port 9020"
+  }
+]

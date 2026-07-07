@@ -1,0 +1,152 @@
+import { useEffect, useState, useCallback, useRef } from 'react';
+import {
+  Table, Button, Tag, Card, Row, Col, Space, message, Typography,
+} from 'antd';
+import {
+  PlayCircleOutlined, StopOutlined, ReloadOutlined,
+} from '@ant-design/icons';
+import type { ColumnsType } from 'antd/es/table';
+import { listServices, startService, stopService } from '../api/services';
+import type { ServiceInfo } from '../types/service';
+
+const { Title, Text } = Typography;
+const POLL_INTERVAL = 3000;
+
+export default function ServiceManager() {
+  const [services, setServices] = useState<ServiceInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [operating, setOperating] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const polling = useRef<ReturnType<typeof setInterval>>();
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const fetchServices = useCallback(async () => {
+    try {
+      const res = await listServices();
+      setServices(res.data);
+    } catch {
+      // ignore poll errors
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchServices();
+    polling.current = setInterval(fetchServices, POLL_INTERVAL);
+    return () => clearInterval(polling.current);
+  }, [fetchServices]);
+
+  const handleStart = async (name: string) => {
+    setOperating(name);
+    try {
+      const res = await startService(name);
+      message.success(res.message);
+      await fetchServices();
+    } catch {
+      message.error(`启动 ${name} 失败`);
+    } finally {
+      setOperating(null);
+    }
+  };
+
+  const handleStop = async (name: string) => {
+    setOperating(name);
+    try {
+      const res = await stopService(name);
+      message.success(res.message);
+      await fetchServices();
+    } catch {
+      message.error(`停止 ${name} 失败`);
+    } finally {
+      setOperating(null);
+    }
+  };
+
+  const statusTag = (status: string) => {
+    if (status === 'running') return <Tag color="green">运行中</Tag>;
+    if (status === 'stopped') return <Tag color="default">已停止</Tag>;
+    return <Tag color="orange">{status}</Tag>;
+  };
+
+  const columns: ColumnsType<ServiceInfo> = [
+    { title: '名称', dataIndex: 'name', key: 'name', width: 120 },
+    { title: '描述', dataIndex: 'description', key: 'description', width: 140, responsive: ['md' as const] },
+    {
+      title: '命令', dataIndex: 'command', key: 'command', responsive: ['lg' as const],
+      render: (cmd: string) => <Text copyable style={{ fontSize: 12 }}>{cmd}</Text>,
+    },
+    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: statusTag },
+    { title: 'PID', dataIndex: 'pid', key: 'pid', width: 80, responsive: ['sm' as const],
+      render: (pid: number | null) => pid ?? '-' },
+    {
+      title: '操作', key: 'action', width: 140,
+      render: (_, record) => (
+        <Space>
+          {record.status === 'running' ? (
+            <Button
+              size="small" danger icon={<StopOutlined />}
+              loading={operating === record.name}
+              onClick={() => handleStop(record.name)}
+            >{isMobile ? '' : '停止'}</Button>
+          ) : (
+            <Button
+              size="small" type="primary" icon={<PlayCircleOutlined />}
+              loading={operating === record.name}
+              onClick={() => handleStart(record.name)}
+            >{isMobile ? '' : '启动'}</Button>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+        <Col><Title level={4} style={{ margin: 0 }}>服务管理</Title></Col>
+        <Col>
+          <Button icon={<ReloadOutlined />} onClick={fetchServices}>刷新</Button>
+        </Col>
+      </Row>
+
+      {isMobile ? (
+        <Row gutter={[8, 8]}>
+          {services.map((svc) => (
+            <Col span={24} key={svc.name}>
+              <Card
+                size="small"
+                actions={[
+                  svc.status === 'running'
+                    ? <StopOutlined key="stop" onClick={() => handleStop(svc.name)} style={{ color: '#ff4d4f' }} />
+                    : <PlayCircleOutlined key="start" onClick={() => handleStart(svc.name)} style={{ color: '#52c41a' }} />,
+                ]}
+              >
+                <Row justify="space-between" align="middle">
+                  <Col><Text strong>{svc.name}</Text></Col>
+                  <Col>{statusTag(svc.status)}</Col>
+                </Row>
+                <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                  {svc.description || svc.command}
+                </div>
+                {svc.pid && <div style={{ fontSize: 12, color: '#aaa' }}>PID: {svc.pid}</div>}
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      ) : (
+        <Table
+          columns={columns}
+          dataSource={services}
+          rowKey="name"
+          loading={loading}
+          scroll={{ x: 'max-content' }}
+          pagination={false}
+        />
+      )}
+    </>
+  );
+}
