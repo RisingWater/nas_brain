@@ -1,12 +1,8 @@
-"""配置 — Config 单例从 .env 加载全部可调参数
-
-用法:
-    from config import cfg
-    api_key = cfg.DEEPSEEK_API_KEY
+"""
+配置 — Config 单例从 .env 加载全部可调参数
 """
 import os
 from dotenv import load_dotenv
-
 
 class ConfigManager:
     """应用配置单例，从 .env 加载"""
@@ -34,7 +30,11 @@ class ConfigManager:
 
         # WXAUTO API
         self.WXAUTO_API_URL = os.getenv("WXAUTO_API_URL", "")
-        self.WXAUTO_API_TOKEN = float(os.getenv("WXAUTO_API_TOKEN", ""))
+        self.WXAUTO_API_TOKEN = os.getenv("WXAUTO_API_TOKEN", "")
+
+        # DB
+        self.DB_PATH = os.getenv("DB_PATH", "data/db/users.db")
+        self.DB_SERVICE_PORT = int(os.getenv("DB_SERVICE_PORT", "9001"))
 
 
 

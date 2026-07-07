@@ -5,7 +5,7 @@ import os
 import sys
 import threading
 import time
-from common.utils import cfg
+from src.common.utils import cfg
 from collections import deque
 from typing import Optional
 
@@ -55,7 +55,6 @@ class LogManager:
         self._counter = 0
 
     # ---- 初始化 ----
-
     def setup(self):
         """安装内存 + 磁盘日志处理器到根 logger，并接管 sys.excepthook"""
         # 磁盘持久化
@@ -80,6 +79,28 @@ class LogManager:
         ))
         logging.root.addHandler(mem_handler)
 
+        # ===== 接管 Uvicorn 日志 =====
+        for name in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
+            uvicorn_logger = logging.getLogger(name)
+            uvicorn_logger.setLevel(logging.DEBUG)
+            uvicorn_logger.addHandler(file_handler)
+            uvicorn_logger.addHandler(mem_handler)
+            uvicorn_logger.propagate = False
+
+        # ===== 控制台输出（可选，通过环境变量控制） =====
+        if os.getenv("LOG_CONSOLE", "true").lower() == "true":
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setLevel(logging.INFO)
+            console_handler.setFormatter(logging.Formatter(
+                "%(asctime)s %(levelname)-8s %(name)s %(message)s",
+                datefmt="%H:%M:%S",
+            ))
+            logging.root.addHandler(console_handler)
+            # Uvicorn 也加控制台
+            for name in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
+                uvicorn_logger = logging.getLogger(name)
+                uvicorn_logger.addHandler(console_handler)
+
         # 捕获未处理的异常
         _orig_excepthook = sys.excepthook
         def _log_excepthook(exc_type, exc_value, exc_tb):
@@ -99,6 +120,10 @@ class LogManager:
                 if _orig_threadhook:
                     _orig_threadhook(args)
             threading.excepthook = _log_threadhook
+
+        # 启动日志
+        logging.info(f"📝 日志初始化完成: {_LOG_FILE}")
+        logging.info(f"📝 服务名: {_LOG_SERVER_NAME}")
 
     # ---- 内部 ----
 

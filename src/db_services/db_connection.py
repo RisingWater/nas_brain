@@ -2,8 +2,7 @@
 import sqlite3
 import threading
 from typing import Optional
-from common.utils import cfg
-
+from src.common.utils import cfg
 
 class DBConnection:
     """SQLite 数据库连接单例"""
@@ -24,7 +23,7 @@ class DBConnection:
         return cls()
     
     def _init(self):
-        self.db_path = getattr(cfg, 'DB_PATH', 'data/users.db')
+        self.db_path = cfg.DB_PATH
         self._conn: Optional[sqlite3.Connection] = None
         self._conn_lock = threading.Lock()
     

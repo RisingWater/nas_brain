@@ -4,7 +4,7 @@ import sys
 import os
 import logging
 import base64
-from common import cfg
+from src.common.utils import cfg
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
