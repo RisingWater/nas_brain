@@ -79,7 +79,33 @@ if __name__ == "__main__":
 
 ### 5. Web 服务代理（如需要前端通过 9020 访问）
 
-如果新服务有前端页面需要调用的 API，在 `src/web_services/app.py` 里添加代理路由。
+如果新服务有前端页面需要调用的 API，在 `src/web_services/app.py` 里添加代理路由，参考已有的 `_proxy_to_sm` / `_proxy_to_brain` 函数。
+
+## 工具插件系统
+
+`src/brain_services/tools/` 下的工具遵循以下模式：
+
+```python
+from ..tools import BaseTool, registry
+
+class MyTool(BaseTool):
+    def __init__(self):
+        super().__init__(
+            name="my_tool",                    # 工具唯一名称
+            description="工具描述",             # LLM 通过描述决定调用
+            parameters={...},                  # OpenAI function-calling schema
+            silent=False,                      # True=不向用户显示执行结果
+            final=False,                       # True=执行后停止继续调用工具
+        )
+    def execute(self, args: dict) -> str:
+        return "执行结果"
+
+registry.register(MyTool())
+```
+
+- 工具放在 `src/brain_services/tools/` 目录，启动时自动加载
+- 热加载：`POST /api/tools/reload` 或前端「工具管理」页面点重载
+- 移植自 `paimon_assist` 的工具：weather, web_search, reminder, memory, door
 
 ## 跨平台注意事项
 
