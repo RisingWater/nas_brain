@@ -2,7 +2,7 @@
 import importlib
 import logging
 import os
-import pkgutil
+import sys
 from pathlib import Path
 from typing import List
 
@@ -41,18 +41,16 @@ def load_tools() -> int:
 
 def reload_tools() -> int:
     """热重载所有工具"""
-    # 清除已有注册
     old_names = [t.name for t in registry.get_all()]
     for name in old_names:
         registry.unregister(name)
 
-    # 重新加载每个模块
     count = 0
     for mod_name in discover_tools():
         try:
             full_name = f"{_TOOLS_PKG.replace('/', '.')}.{mod_name}"
-            if full_name in importlib._bootstrap._sys.modules:
-                importlib.reload(importlib._bootstrap._sys.modules[full_name])
+            if full_name in sys.modules:
+                importlib.reload(sys.modules[full_name])
             else:
                 importlib.import_module(full_name)
             count += 1
