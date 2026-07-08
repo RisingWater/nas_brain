@@ -5,6 +5,7 @@ import {
   MenuUnfoldOutlined,
   UserOutlined,
   CloudServerOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -13,6 +14,7 @@ const { Header, Sider, Content } = Layout;
 const menuItems = [
   { key: '/users', icon: <UserOutlined />, label: '用户管理' },
   { key: '/services', icon: <CloudServerOutlined />, label: '服务管理' },
+  { key: '/logs', icon: <FileTextOutlined />, label: '日志查看' },
 ];
 
 export default function AdminLayout() {
