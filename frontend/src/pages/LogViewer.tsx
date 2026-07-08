@@ -25,9 +25,10 @@ export default function LogViewer() {
   const [keyword, setKeyword] = useState('');
   const [level, setLevel] = useState<string | undefined>(undefined);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [atBottom, setAtBottom] = useState(true);
+  const [showBottomBtn, setShowBottomBtn] = useState(false);
+
   const polling = useRef<ReturnType<typeof setInterval>>();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // 加载文件列表
   useEffect(() => {
@@ -36,20 +37,6 @@ export default function LogViewer() {
       setFiles(fs);
       if (!selected && fs.length > 0) setSelected(fs[0].name);
     });
-  }, []);
-
-  // 判断是否在底部（距底 < 50px 视为在底部）
-  const updateAtBottom = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    setAtBottom(dist < 50);
-  }, []);
-
-  const scrollToBottom = useCallback((smooth = true) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
   }, []);
 
   const fetchLog = useCallback(async () => {
@@ -80,12 +67,34 @@ export default function LogViewer() {
     return () => clearInterval(polling.current);
   }, [autoRefresh, fetchLog]);
 
-  // 新内容到达：仅在底部时自动滚
+  // 滚动到底部
+  const scrollToBottom = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    setShowBottomBtn(false);
+  }, []);
+
+  // 内容变化时，如果在底部则自动滚
   useEffect(() => {
-    if (atBottom) {
-      scrollToBottom(false);
+    const el = containerRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (dist < 50) {
+      el.scrollTop = el.scrollHeight;
+      setShowBottomBtn(false);
+    } else {
+      setShowBottomBtn(true);
     }
   }, [lines]);
+
+  // 监听手动滚动
+  const onScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowBottomBtn(dist >= 50);
+  }, []);
 
   const renderLine = (line: string, i: number) => {
     let tag: string | null = null;
@@ -157,37 +166,38 @@ export default function LogViewer() {
         </Col>
       </Row>
 
-      <div style={{ position: 'relative', flex: 1 }}>
-        <Card
-          size="small"
-          title={<Text style={{ fontSize: 13 }}>{selected || '未选择'} {total > 0 && `(${total} 行)`}</Text>}
-          style={{ height: '100%' }}
-          bodyStyle={{ padding: 0, height: 'calc(100% - 38px)' }}
+      <Card
+        size="small"
+        title={<Text style={{ fontSize: 13 }}>{selected}{total > 0 ? ` (${total} 行)` : ''}</Text>}
+        style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+        bodyStyle={{ flex: 1, minHeight: 0, padding: 0, position: 'relative', overflow: 'hidden' }}
+      >
+        <div
+          ref={containerRef}
+          onScroll={onScroll}
+          style={{ height: '100%', overflowY: 'auto' }}
         >
-          <div ref={scrollRef} onScroll={updateAtBottom} style={{ height: '100%', overflow: 'auto' }}>
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
-            ) : lines.length === 0 ? (
-              <Empty description="暂无日志" style={{ padding: 40 }} />
-            ) : (
-              <div style={{ padding: '4px 0' }}>
-                {lines.map((line, i) => renderLine(line, i))}
-              </div>
-            )}
-          </div>
-        </Card>
+          {loading && lines.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+          ) : lines.length === 0 ? (
+            <Empty description="暂无日志" style={{ padding: 40 }} />
+          ) : (
+            <div style={{ padding: '4px 0' }}>
+              {lines.map((line, i) => renderLine(line, i))}
+            </div>
+          )}
+        </div>
 
-        {/* 不在底部时显示回底按钮 */}
-        {!atBottom && (
+        {showBottomBtn && (
           <Button
             type="primary"
             shape="circle"
             icon={<VerticalAlignBottomOutlined />}
-            onClick={() => scrollToBottom(true)}
+            onClick={scrollToBottom}
             style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 10 }}
           />
         )}
-      </div>
+      </Card>
     </div>
   );
 }
