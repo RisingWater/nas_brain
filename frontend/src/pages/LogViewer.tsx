@@ -161,8 +161,8 @@ export default function LogViewer() {
         <Card
           size="small"
           title={<Text style={{ fontSize: 13 }}>{selected || '未选择'} {total > 0 && `(${total} 行)`}</Text>}
-          style={{ height: '100%', overflow: 'hidden' }}
-          bodyStyle={{ padding: 0, height: 'calc(100% - 38px)', overflow: 'auto' }}
+          style={{ height: '100%' }}
+          bodyStyle={{ padding: 0, height: 'calc(100% - 38px)' }}
         >
           <div ref={scrollRef} onScroll={updateAtBottom} style={{ height: '100%', overflow: 'auto' }}>
             {loading ? (
