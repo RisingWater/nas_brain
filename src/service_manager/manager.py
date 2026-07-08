@@ -1,13 +1,15 @@
 """ServiceManager — 微服务子进程管理器"""
 import json
+import logging
 import os
 import shlex
-import signal
 import subprocess
 import sys
 import threading
 import time
 from typing import Dict, List, Optional
+
+logger = logging.getLogger("service_manager")
 
 
 def _find_project_root() -> str:
@@ -135,7 +137,7 @@ class ServiceManager:
                 svc.pid = svc.process.pid
                 return True
             except Exception as e:
-                print(f"[service_manager] 启动 {svc.name} 失败: {e}")
+                logger.error("启动 %s 失败: %s", svc.name, e)
                 svc.process = None
                 svc.pid = None
                 return False
@@ -155,7 +157,7 @@ class ServiceManager:
                     proc.kill()  # POSIX: SIGKILL, Windows: TerminateProcess
                     proc.wait(timeout=3)
             except Exception as e:
-                print(f"[service_manager] 停止 {svc.name} 失败: {e}")
+                logger.error("停止 %s 失败: %s", svc.name, e)
             finally:
                 svc.process = None
                 svc.pid = None

@@ -172,13 +172,8 @@ class WeChatProcessor:
             logger.warning("WXAuto 未配置，跳过消息轮询")
             return
 
-        wxname = os.getenv("WECHAT_GATEWAY_WXNAME", "")
-        if not wxname:
-            logger.warning("WECHAT_GATEWAY_WXNAME 未设置，跳过消息轮询")
-            return
-
         self._running = True
-        logger.info("开始微信消息轮询 (wxname=%s)", wxname)
+        logger.info("开始微信消息轮询")
 
         while self._running:
             try:

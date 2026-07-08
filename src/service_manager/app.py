@@ -1,5 +1,6 @@
 """service_manager — 微服务管理入口"""
 import os
+import logging
 os.environ.setdefault("LOG_SERVER_NAME", "service_manager")
 
 from contextlib import asynccontextmanager
@@ -8,19 +9,19 @@ from src.common.utils import log_manager
 from .manager import ServiceManager
 from .routes import services as services_route
 
+logger = logging.getLogger("service_manager")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup: 读取配置并启动所有服务
     config_path = os.getenv("SERVICE_MANAGER_CONFIG", "deploy/service_config.json")
     manager = ServiceManager(config_path)
     services_route.init(manager)
     app.state.manager = manager
-    print("🚀 service_manager 启动所有子服务...")
+    logger.info("启动所有子服务...")
     manager.start_all()
     yield
-    # shutdown: 停止所有服务
-    print("🛑 service_manager 停止所有子服务...")
+    logger.info("停止所有子服务...")
     manager.stop_all()
 
 

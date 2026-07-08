@@ -1,5 +1,6 @@
 """wechat_gateway — 微信消息网关入口"""
 import os
+import logging
 os.environ.setdefault("LOG_SERVER_NAME", "wechat_gateway")
 
 import threading
@@ -8,6 +9,8 @@ from fastapi import FastAPI
 from src.common.utils import log_manager
 from .routes import status, files
 from .processor import WeChatProcessor
+
+logger = logging.getLogger("wechat_gateway")
 
 _processor: WeChatProcessor = None
 _thread: threading.Thread = None
@@ -18,17 +21,15 @@ async def lifespan(app: FastAPI):
     global _processor, _thread
     _processor = WeChatProcessor()
 
-    # 后台线程启动轮询
     _thread = threading.Thread(target=_processor.run_loop, daemon=True)
     _thread.start()
-    print("🤖 wechat_gateway 消息轮询已启动")
+    logger.info("消息轮询已启动")
 
     yield
 
-    # shutdown
     if _processor:
         _processor.stop_loop()
-    print("🤖 wechat_gateway 已停止")
+    logger.info("已停止")
 
 
 app = FastAPI(title="微信网关微服务", version="1.0.0", lifespan=lifespan)
