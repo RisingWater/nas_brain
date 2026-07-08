@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Select, Card, Row, Col, Input, Switch, Typography, Tag, Space, Empty, Spin,
+  Select, Card, Row, Col, Input, Switch, Typography, Tag, Space, Empty, Spin, Button,
 } from 'antd';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { ReloadOutlined, SearchOutlined, VerticalAlignBottomOutlined } from '@ant-design/icons';
 import type { LogFile } from '../types/log';
 import { listLogFiles, readLog } from '../api/logs';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const POLL_INTERVAL = 3000;
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -25,8 +25,9 @@ export default function LogViewer() {
   const [keyword, setKeyword] = useState('');
   const [level, setLevel] = useState<string | undefined>(undefined);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [atBottom, setAtBottom] = useState(true);
   const polling = useRef<ReturnType<typeof setInterval>>();
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // 加载文件列表
   useEffect(() => {
@@ -35,6 +36,20 @@ export default function LogViewer() {
       setFiles(fs);
       if (!selected && fs.length > 0) setSelected(fs[0].name);
     });
+  }, []);
+
+  // 判断是否在底部（距底 < 50px 视为在底部）
+  const updateAtBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setAtBottom(dist < 50);
+  }, []);
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
   }, []);
 
   const fetchLog = useCallback(async () => {
@@ -65,19 +80,18 @@ export default function LogViewer() {
     return () => clearInterval(polling.current);
   }, [autoRefresh, fetchLog]);
 
-  // 自动滚到底部
+  // 新内容到达：仅在底部时自动滚
   useEffect(() => {
-    if (autoRefresh && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (atBottom) {
+      scrollToBottom(false);
     }
-  }, [lines, autoRefresh]);
+  }, [lines]);
 
   const renderLine = (line: string, i: number) => {
     let tag: string | null = null;
     for (const lv of ['ERROR', 'WARNING', 'INFO', 'DEBUG']) {
       if (line.includes(lv)) { tag = lv; break; }
     }
-    // 着色匹配级别
     const color = tag ? LEVEL_COLORS[tag] : undefined;
 
     return (
@@ -143,23 +157,37 @@ export default function LogViewer() {
         </Col>
       </Row>
 
-      <Card
-        size="small"
-        title={<Text style={{ fontSize: 13 }}>{selected || '未选择'} {total > 0 && `(${total} 行)`}</Text>}
-        style={{ flex: 1, overflow: 'auto' }}
-        bodyStyle={{ padding: 0 }}
-      >
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
-        ) : lines.length === 0 ? (
-          <Empty description="暂无日志" style={{ padding: 40 }} />
-        ) : (
-          <div style={{ padding: '4px 0' }}>
-            {lines.map((line, i) => renderLine(line, i))}
-            <div ref={bottomRef} />
+      <div style={{ position: 'relative', flex: 1 }}>
+        <Card
+          size="small"
+          title={<Text style={{ fontSize: 13 }}>{selected || '未选择'} {total > 0 && `(${total} 行)`}</Text>}
+          style={{ height: '100%', overflow: 'hidden' }}
+          bodyStyle={{ padding: 0, height: 'calc(100% - 38px)', overflow: 'auto' }}
+        >
+          <div ref={scrollRef} onScroll={updateAtBottom} style={{ height: '100%', overflow: 'auto' }}>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+            ) : lines.length === 0 ? (
+              <Empty description="暂无日志" style={{ padding: 40 }} />
+            ) : (
+              <div style={{ padding: '4px 0' }}>
+                {lines.map((line, i) => renderLine(line, i))}
+              </div>
+            )}
           </div>
+        </Card>
+
+        {/* 不在底部时显示回底按钮 */}
+        {!atBottom && (
+          <Button
+            type="primary"
+            shape="circle"
+            icon={<VerticalAlignBottomOutlined />}
+            onClick={() => scrollToBottom(true)}
+            style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 10 }}
+          />
         )}
-      </Card>
+      </div>
     </div>
   );
 }
