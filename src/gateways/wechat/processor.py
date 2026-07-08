@@ -143,19 +143,21 @@ class WeChatProcessor:
             return
 
         self._running = True
-        logger.info("开始微信消息轮询 (wxname=%s, interval=%ss)", wxname, _POLL_INTERVAL)
+        logger.info("开始微信消息轮询 (wxname=%s)", wxname)
 
         while self._running:
             try:
-                result = self.wxauto.get_next_new_message(
-                    wxname=wxname, filter_mute=False, timeout=5,
-                )
+                # get_next_new_message 内部有 30 秒 HTTP 超时做长轮询
+                result = self.wxauto.get_next_new_message()
 
-                if result.get("has_message"):
+                if not result.get("success"):
+                    logger.warning("获取消息失败: %s", result.get("error"))
+                elif result.get("has_message"):
                     chat_name = result.get("chat_name", "")
                     chat_type = result.get("chat_type", "friend")
                     messages = result.get("messages", [])
 
+                    logger.info("收到消息来自: %s (%d 条)", chat_name, len(messages))
                     for msg in messages:
                         self._process_one(chat_name, chat_type, msg)
 
