@@ -1,6 +1,9 @@
 """web_services 管理后端入口"""
 import os
+os.environ.setdefault("LOG_SERVER_NAME", "web_services")
+
 from fastapi import FastAPI, Request
+from src.common.utils import log_manager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse

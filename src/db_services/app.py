@@ -1,4 +1,7 @@
 # db_services/app.py
+import os
+os.environ.setdefault("LOG_SERVER_NAME", "db_services")
+
 from fastapi import FastAPI
 from .routes import users
 from src.common.utils import cfg

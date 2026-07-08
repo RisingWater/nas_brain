@@ -1,8 +1,11 @@
 """wechat_gateway — 微信消息网关入口"""
 import os
+os.environ.setdefault("LOG_SERVER_NAME", "wechat_gateway")
+
 import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from src.common.utils import log_manager
 from .routes import status
 from .processor import WeChatProcessor
 

@@ -1,6 +1,9 @@
 """brain_services — 大脑微服务入口"""
 import os
+os.environ.setdefault("LOG_SERVER_NAME", "brain_services")
+
 from fastapi import FastAPI
+from src.common.utils import log_manager
 from .routes import agent
 
 app = FastAPI(title="大脑微服务", version="1.0.0")

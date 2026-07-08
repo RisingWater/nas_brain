@@ -1,7 +1,10 @@
 """service_manager — 微服务管理入口"""
 import os
+os.environ.setdefault("LOG_SERVER_NAME", "service_manager")
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from src.common.utils import log_manager
 from .manager import ServiceManager
 from .routes import services as services_route
 
