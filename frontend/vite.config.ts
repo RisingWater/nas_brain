@@ -13,6 +13,10 @@ export default defineConfig({
         target: 'http://localhost:9022',
         changeOrigin: true,
       },
+      '/api/tools': {
+        target: 'http://localhost:9031',
+        changeOrigin: true,
+      },
     },
   },
 })

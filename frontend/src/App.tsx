@@ -3,6 +3,7 @@ import AdminLayout from './components/AdminLayout';
 import UserList from './pages/UserList';
 import ServiceManager from './pages/ServiceManager';
 import LogViewer from './pages/LogViewer';
+import ToolManager from './pages/ToolManager';
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
           <Route path="/users" element={<UserList />} />
           <Route path="/services" element={<ServiceManager />} />
           <Route path="/logs" element={<LogViewer />} />
+          <Route path="/tools" element={<ToolManager />} />
           <Route path="/" element={<Navigate to="/users" replace />} />
         </Route>
       </Routes>
