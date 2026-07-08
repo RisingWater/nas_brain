@@ -1,7 +1,7 @@
 """service_manager — 微服务管理入口"""
 import os
 import logging
-os.environ.setdefault("LOG_SERVER_NAME", "service_manager")
+os.environ["LOG_SERVER_NAME"] = "service_manager"
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI

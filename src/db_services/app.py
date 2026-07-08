@@ -1,6 +1,6 @@
 # db_services/app.py
 import os
-os.environ.setdefault("LOG_SERVER_NAME", "db_services")
+os.environ["LOG_SERVER_NAME"] = "db_services"
 
 from fastapi import FastAPI
 from .routes import users

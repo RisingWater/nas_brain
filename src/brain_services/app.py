@@ -1,6 +1,6 @@
 """brain_services — 大脑微服务入口"""
 import os
-os.environ.setdefault("LOG_SERVER_NAME", "brain_services")
+os.environ["LOG_SERVER_NAME"] = "brain_services"
 
 from fastapi import FastAPI
 from src.common.utils import log_manager
