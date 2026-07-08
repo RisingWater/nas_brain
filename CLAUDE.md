@@ -94,6 +94,8 @@ if __name__ == "__main__":
 | service_manager | 9022 |
 | web_services | 9020 |
 | db_services | 9021 |
+| wechat_gateway | 9030 |
+| brain_services | 9031 |
 
 ## 提交规范
 

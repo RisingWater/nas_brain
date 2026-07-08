@@ -8,5 +8,15 @@
     "name": "web_services",
     "description": "管理后端微服务",
     "command": "python -m uvicorn src.web_services.app:app --host 0.0.0.0 --port 9020"
+  },
+  {
+    "name": "wechat_gateway",
+    "description": "微信消息网关",
+    "command": "python -m uvicorn src.gateways.wechat.app:app --host 0.0.0.0 --port 9030"
+  },
+  {
+    "name": "brain_services",
+    "description": "大脑微服务",
+    "command": "python -m uvicorn src.brain_services.app:app --host 0.0.0.0 --port 9031"
   }
 ]
