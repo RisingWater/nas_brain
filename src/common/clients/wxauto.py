@@ -344,6 +344,68 @@ class WXAuto:
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
 
+    def upload_file_bytes(self, filename: str, data: bytes, description="", uploader="") -> dict:
+        """
+        Upload file via WXAuto API, reading from bytes instead of a file path.
+
+        Args:
+            filename (str): Original filename (used for the multipart field)
+            data (bytes): File content
+            description (str): File description (optional)
+            uploader (str): Uploader name (optional)
+
+        Returns:
+            dict: API response with file_id
+        """
+        if not self._api_url or not self._token:
+            return {"success": False, "error": "WXAuto API URL or Token not configured"}
+
+        try:
+            url = f"{self._api_url}/api/v1/files/upload"
+            headers = {"accept": "application/json", "Authorization": f"Bearer {self._token}"}
+            files = {"file": (filename, data)}
+            form = {}
+            if description: form["description"] = description
+            if uploader: form["uploader"] = uploader
+
+            logger.info("Uploading file from bytes: %s (%d bytes)", filename, len(data))
+            resp = requests.post(url, headers=headers, files=files, data=form, timeout=30)
+
+            if resp.status_code == 200:
+                result = resp.json()
+                logger.info("File uploaded: %s, file_id=%s", result.get("filename"), result.get("file_id"))
+                return {"success": True, "data": result}
+            return {"success": False, "error": f"Upload failed: {resp.status_code}", "status_code": resp.status_code}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def send_file_data(self, who: str, filename: str, data: bytes,
+                       wxname="", exact=False, description="", uploader="") -> dict:
+        """Upload bytes and send as file message — no temp file needed."""
+        upload = self.upload_file_bytes(filename, data, description, uploader)
+        if not upload.get("success"):
+            return upload
+        file_id = upload["data"].get("file_id")
+        if not file_id:
+            return {"success": False, "error": "No file_id from upload"}
+
+        try:
+            url = f"{self._api_url}/v1/wechat/sendfile"
+            headers = {
+                "accept": "application/json",
+                "Authorization": f"Bearer {self._token}",
+                "Content-Type": "application/json",
+            }
+            payload = {"wxname": wxname, "who": who, "exact": exact, "file_id": file_id}
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            self.delete_file(file_id)  # 发送后清理远端文件
+            if resp.status_code == 200 and resp.json().get("success"):
+                logger.info("File sent -> %s: %s", who, filename)
+                return {"success": True, "data": resp.json()}
+            return {"success": False, "error": resp.text, "status_code": resp.status_code}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def download_file(self, file_id, file_path):
         """
         Download file by file_id

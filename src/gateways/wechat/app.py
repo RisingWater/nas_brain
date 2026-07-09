@@ -7,7 +7,7 @@ import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from src.common.utils import log_manager
-from .routes import status, files
+from .routes import status, files, send
 from .processor import WeChatProcessor
 
 logger = logging.getLogger("wechat_gateway")
@@ -36,6 +36,7 @@ app = FastAPI(title="微信网关微服务", version="1.0.0", lifespan=lifespan)
 
 app.include_router(status.router, prefix="/api/gateway", tags=["网关状态"])
 app.include_router(files.router, prefix="/api/gateway", tags=["文件下载"])
+app.include_router(send.router, prefix="/api/gateway", tags=["消息发送"])
 
 
 @app.get("/health")
