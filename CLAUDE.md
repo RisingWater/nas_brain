@@ -97,8 +97,9 @@ class MyTool(BaseTool):
             silent=False,                      # True=不向用户显示执行结果
             final=False,                       # True=执行后停止继续调用工具
         )
-    def execute(self, args: dict) -> str:
-        return "执行结果"
+    def execute(self, args: dict) -> dict:
+        """返回 {"text": "回复文字", "files": ["/tmp/img.png"]}"""
+        return {"text": "执行结果", "files": []}
 
 registry.register(MyTool())
 ```
@@ -109,28 +110,40 @@ registry.register(MyTool())
 
 ## 处理器插件系统
 
-`src/brain_services/processors/` 下的处理器供 direct 策略使用：
+`src/brain_services/processors/` 下的处理器支持热加载（同 tool 模式）：
 
 ```python
-from ..processors import BaseProcessor
+from ..processors import BaseProcessor, registry
 
 class MyProcessor(BaseProcessor):
+    name = "my_processor"
+    description = "处理器说明"
+
     def priority(self) -> int:
-        return 100  # 越高越优先
+        return 10  # 越小越优先
 
     def can_handle(self, req: AgentRequest) -> bool:
-        return req.content_type == ContentType.TEXT
+        return req.content_type == ContentType.IMAGE
 
-    def handle(self, req: AgentRequest) -> dict | None:
-        # 处理消息，返回响应数据
-        return {"reply": "处理结果"}
+    def handle(self, req: AgentRequest, ctx: ProcessorContext) -> dict | None:
+        ctx.reply("处理完成")
+        return {"reply": "处理完成"}
+
+registry.register(MyProcessor())
 ```
 
-- 处理器按 priority 降序排列，第一个 `can_handle` 返回 True 的执行
+- 处理器按 priority **升序**排列，第一个 `can_handle` 返回 True 的执行
 - `handle` 返回 None 表示未处理，交给下一个处理器
-- 处理器可以调用 Tool（通过 ToolRegistry）
+- `ProcessorContext` 提供 `reply()`、`send_wechat()`、`download_file()` 等能力
+- 热加载：`POST /api/processors/reload` 或前端页面
+- 已移植：homework（OCR）、print（CUPS打印）、urlsave（链接转DOCX）
 
-## 策略引擎
+## 公共库
+
+- `src/common/lib/` — 工具库（file_converter, image_binarize, file_recognize, printer, fixed_web_converter）
+- `src/common/clients/` — 外部 API 客户端（deepseek, baidu_ocr, dsmxp, zhixue, qb_location, amap, kv_store）
+
+## 策略引擎（TODO）
 
 - 每个用户有策略配置：`smart`（LLM + 工具）或 `direct`（处理器）
 - 语音网关来源 → 强制 smart
@@ -141,7 +154,7 @@ class MyProcessor(BaseProcessor):
 wechat_gateway 同时负责收发：
 - 收：后台轮询 `wxauto.get_next_new_message()`
 - 发：`POST /api/gateway/send-text` 和 `POST /api/gateway/send-file`
-- 其他微服务（如 timer_services）通过 HTTP 调用发送端点
+- 其他微服务（如 schedule_services）通过 HTTP 调用发送端点
 
 ## 跨平台注意事项
 
@@ -158,7 +171,7 @@ wechat_gateway 同时负责收发：
 | db_services | 9021 | ✅ |
 | wechat_gateway | 9030 | ✅ |
 | brain_services | 9031 | ✅ |
-| timer_services | 9040 | ⏳ |
+| schedule_services | 9040 | ✅ |
 | playback_services | 9041 | ✅ |
 
 ## 提交规范
