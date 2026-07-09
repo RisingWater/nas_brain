@@ -107,6 +107,42 @@ registry.register(MyTool())
 - 热加载：`POST /api/tools/reload` 或前端「工具管理」页面点重载
 - 移植自 `paimon_assist` 的工具：weather, web_search, reminder, memory, door
 
+## 处理器插件系统
+
+`src/brain_services/processors/` 下的处理器供 direct 策略使用：
+
+```python
+from ..processors import BaseProcessor
+
+class MyProcessor(BaseProcessor):
+    def priority(self) -> int:
+        return 100  # 越高越优先
+
+    def can_handle(self, req: AgentRequest) -> bool:
+        return req.content_type == ContentType.TEXT
+
+    def handle(self, req: AgentRequest) -> dict | None:
+        # 处理消息，返回响应数据
+        return {"reply": "处理结果"}
+```
+
+- 处理器按 priority 降序排列，第一个 `can_handle` 返回 True 的执行
+- `handle` 返回 None 表示未处理，交给下一个处理器
+- 处理器可以调用 Tool（通过 ToolRegistry）
+
+## 策略引擎
+
+- 每个用户有策略配置：`smart`（LLM + 工具）或 `direct`（处理器）
+- 语音网关来源 → 强制 smart
+- 微信来源 → 按用户配置
+
+## 消息发送
+
+wechat_gateway 同时负责收发：
+- 收：后台轮询 `wxauto.get_next_new_message()`
+- 发：`POST /api/gateway/send-text` 和 `POST /api/gateway/send-file`
+- 其他微服务（如 timer_services）通过 HTTP 调用发送端点
+
 ## 跨平台注意事项
 
 - 子进程管理用 `subprocess.Popen` + `terminate()` / `kill()`，不要用 taskkill
@@ -115,13 +151,15 @@ registry.register(MyTool())
 
 ## 关键端口
 
-| 服务 | 端口 |
-|------|------|
-| service_manager | 9022 |
-| web_services | 9020 |
-| db_services | 9021 |
-| wechat_gateway | 9030 |
-| brain_services | 9031 |
+| 服务 | 端口 | 状态 |
+|------|------|------|
+| service_manager | 9022 | ✅ |
+| web_services | 9020 | ✅ |
+| db_services | 9021 | ✅ |
+| wechat_gateway | 9030 | ✅ |
+| brain_services | 9031 | ✅ |
+| timer_services | 9040 | ⏳ |
+| tts_services | 9041 | ⏳ |
 
 ## 提交规范
 
