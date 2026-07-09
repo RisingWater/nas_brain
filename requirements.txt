@@ -4,3 +4,4 @@ Requests
 dotenv
 psutil
 pydantic
+python-multipart
