@@ -159,7 +159,7 @@ wechat_gateway 同时负责收发：
 | wechat_gateway | 9030 | ✅ |
 | brain_services | 9031 | ✅ |
 | timer_services | 9040 | ⏳ |
-| tts_services | 9041 | ⏳ |
+| playback_services | 9041 | ✅ |
 
 ## 提交规范
 

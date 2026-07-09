@@ -1,16 +1,19 @@
 # 开发计划
 
-## 阶段 1：TTS 语音合成微服务
+## 阶段 1：音频播放微服务 ✅
 
-- [ ] `src/tts_services/` — FastAPI 微服务，端口 9041
-  - [ ] `app.py` — FastAPI 入口，设置 LOG_SERVER_NAME
-  - [ ] `tts_engine.py` — TTS 引擎（移植 paimon_assist HttpTTS）
-  - [ ] `tts_cache.py` — 语音缓存（文件缓存，避免重复合成）
-  - [ ] `routes/tts.py` — API 路由
-    - `POST /api/tts/synthesize` — 文本→音频文件返回
-    - `POST /api/tts/speak` — 文本→合成并播放（需音频设备）
-- [ ] 注册到 `deploy/service_config.json`
-- [ ] 添加 `TTS_URL` 到 .env
+- [x] `src/playback_services/` — FastAPI 微服务，端口 9041
+  - [x] `app.py` — FastAPI 入口，设置 LOG_SERVER_NAME
+  - [x] `tts_engine.py` — TTS 引擎（移植 paimon_assist HttpTTS）
+  - [x] `tts_cache.py` — 语音缓存（文件缓存 + JSON 索引）
+  - [x] `routes/tts.py` — API 路由
+    - `POST /api/tts/synthesize` — 文本→音频文件返回（支持缓存）
+    - `POST /api/tts/speak` — 文本→合成并播放（pyaudio，需音频设备）
+  - [x] `routes/cache.py` — 缓存管理 API（列表/删除/清空/统计）
+- [x] 注册到 `deploy/service_config.json`
+- [x] 添加配置到 `.env`（TTS_URL、TTS_CACHE_DIR、TTS_VOICE）
+- [x] web_services 添加 `/api/tts` 代理路由
+- [x] 前端 TTS 缓存管理页面（统计卡片 + 列表 + 删除/清空）
 
 ## 阶段 2：定时任务微服务
 
@@ -87,4 +90,4 @@
 | wechat_gateway | 9030 | ✅（收+发）|
 | brain_services | 9031 | ✅（工具就绪，策略待开发）|
 | timer_services | 9040 | ⏳ |
-| tts_services | 9041 | ⏳ |
+| playback_services | 9041 | ✅ |

@@ -116,6 +116,62 @@ async def proxy_tools_schemas(request: Request):
     return await _proxy_to_brain("/api/tools/schemas", request)
 
 
+# ---- 代理 /api/speak → playback_services:9041 ----
+async def _proxy_to_playback(path: str, request: Request) -> JSONResponse:
+    qs = request.url.query
+    url = f"http://127.0.0.1:9041{path}"
+    if qs:
+        url += f"?{qs}"
+    body = await request.body()
+    headers = {k: v for k, v in request.headers.items()
+               if k.lower() not in ("host", "content-length")}
+    try:
+        resp = await asyncio.to_thread(
+            _req.request, request.method, url, data=body, headers=headers, timeout=30,
+        )
+        content_type = resp.headers.get("content-type", "")
+        if "audio/" in content_type:
+            from fastapi.responses import Response
+            return Response(content=resp.content, media_type=content_type,
+                            headers=dict(resp.headers))
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+    except Exception as e:
+        return JSONResponse(
+            content={"code": 502, "message": f"playback_services 不可用: {e}", "data": None},
+            status_code=502,
+        )
+
+
+@app.api_route("/api/speak/synthesize", methods=["POST"])
+async def proxy_speak_synthesize(request: Request):
+    return await _proxy_to_playback("/api/speak/synthesize", request)
+
+
+@app.api_route("/api/speak/play", methods=["POST"])
+async def proxy_speak_play(request: Request):
+    return await _proxy_to_playback("/api/speak/play", request)
+
+
+@app.api_route("/api/tts/cache", methods=["GET"])
+async def proxy_tts_cache_list(request: Request):
+    return await _proxy_to_playback("/api/tts/cache", request)
+
+
+@app.api_route("/api/tts/cache/stats", methods=["GET"])
+async def proxy_tts_cache_stats(request: Request):
+    return await _proxy_to_playback("/api/tts/cache/stats", request)
+
+
+@app.api_route("/api/tts/cache/{cache_id}", methods=["DELETE"])
+async def proxy_tts_cache_delete(cache_id: str, request: Request):
+    return await _proxy_to_playback(f"/api/tts/cache/{cache_id}", request)
+
+
+@app.api_route("/api/tts/cache", methods=["DELETE"])
+async def proxy_tts_cache_clear(request: Request):
+    return await _proxy_to_playback("/api/tts/cache", request)
+
+
 # 静态文件 — 前端构建产物
 _frontend_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
 _frontend_dist = os.path.normpath(_frontend_dist)
