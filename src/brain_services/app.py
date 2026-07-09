@@ -6,8 +6,9 @@ os.environ["LOG_SERVER_NAME"] = "brain_services"
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from src.common.utils import log_manager
-from .routes import agent, tools_mgmt
+from .routes import agent, tools_mgmt, processors_mgmt
 from .tools.plugin_manager import load_tools
+from .processors.plugin_manager import load_all as load_processors
 
 logger = logging.getLogger("brain_services")
 
@@ -17,6 +18,9 @@ async def lifespan(app: FastAPI):
     logger.info("加载工具插件...")
     count = load_tools()
     logger.info("工具加载完成: %d 个", count)
+    logger.info("加载处理器...")
+    pcount = load_processors()
+    logger.info("处理器加载完成: %d 个", pcount)
     yield
 
 
@@ -24,6 +28,7 @@ app = FastAPI(title="大脑微服务", version="1.0.0", lifespan=lifespan)
 
 app.include_router(agent.router, prefix="/api/agent-request", tags=["大脑请求"])
 app.include_router(tools_mgmt.router, prefix="/api/tools", tags=["工具管理"])
+app.include_router(processors_mgmt.router, prefix="/api/processors", tags=["处理器管理"])
 
 
 @app.get("/health")

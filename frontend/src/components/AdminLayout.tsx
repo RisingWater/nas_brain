@@ -10,6 +10,7 @@ import {
   SoundOutlined,
   ClockCircleOutlined,
   ThunderboltOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -23,6 +24,7 @@ const menuItems = [
   { key: '/tts-cache', icon: <SoundOutlined />, label: 'TTS 缓存' },
   { key: '/schedules', icon: <ClockCircleOutlined />, label: '定时提醒' },
   { key: '/detectors', icon: <ThunderboltOutlined />, label: '定时任务' },
+  { key: '/processors', icon: <ExperimentOutlined />, label: '处理器' },
 ];
 
 export default function AdminLayout() {

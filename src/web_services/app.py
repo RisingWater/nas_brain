@@ -219,6 +219,24 @@ async def proxy_detectors_load(request: Request):
     return await _proxy_to_schedule("/api/detectors/load", request)
 
 
+# ---- 代理 /api/processors → brain_services:9031 ----
+# 复用已有的 _proxy_to_brain（定义在 tools 代理上方）
+
+@app.api_route("/api/processors", methods=["GET"])
+async def proxy_processors_list(request: Request):
+    return await _proxy_to_brain("/api/processors", request)
+
+
+@app.api_route("/api/processors/reload", methods=["POST"])
+async def proxy_processors_reload(request: Request):
+    return await _proxy_to_brain("/api/processors/reload", request)
+
+
+@app.api_route("/api/processors/load", methods=["POST"])
+async def proxy_processors_load(request: Request):
+    return await _proxy_to_brain("/api/processors/load", request)
+
+
 # 静态文件 — 前端构建产物
 _frontend_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
 _frontend_dist = os.path.normpath(_frontend_dist)
