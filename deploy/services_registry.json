@@ -1,0 +1,31 @@
+{
+  "说明": "多机模式（SINGLETON=0）时各微服务的 IP 地址。单机模式（SINGLETON=1）忽略此文件，统一用 127.0.0.1。",
+  "db_services": {
+    "host": "192.168.1.100",
+    "description": "数据库微服务"
+  },
+  "web_services": {
+    "host": "192.168.1.100",
+    "description": "管理后端微服务"
+  },
+  "service_manager": {
+    "host": "192.168.1.100",
+    "description": "微服务管理器"
+  },
+  "wechat_gateway": {
+    "host": "192.168.1.100",
+    "description": "微信消息网关（需在 Windows 上运行 wxauto）"
+  },
+  "brain_services": {
+    "host": "192.168.1.101",
+    "description": "大脑微服务"
+  },
+  "playback_services": {
+    "host": "192.168.1.100",
+    "description": "音频播放微服务"
+  },
+  "timer_services": {
+    "host": "192.168.1.100",
+    "description": "定时任务微服务"
+  }
+}
