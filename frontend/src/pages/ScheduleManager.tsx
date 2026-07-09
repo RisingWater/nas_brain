@@ -60,6 +60,7 @@ export default function ScheduleManager() {
       strategy: s.strategy,
       notify_type: s.notify_type,
       lunar: s.lunar,
+      notify_target: s.notify_target || '',
     };
     if (s.rdatetime) {
       if (s.rtype === 'once') {
@@ -87,7 +88,8 @@ export default function ScheduleManager() {
         strategy: values.strategy,
         notify_type: values.notify_type,
         lunar: values.lunar || false,
-        user_id: values.user_id || 'u_unknown',
+        creator_id: values.creator_id || 'u_unknown',
+        notify_target: values.notify_target || '',
       };
 
       if (values.rtype === 'once') {
@@ -155,8 +157,12 @@ export default function ScheduleManager() {
       ),
     },
     {
-      title: '通知', dataIndex: 'notify_type', key: 'notify_type', width: 70,
+      title: '通知', dataIndex: 'notify_type', key: 'notify_type', width: 60,
       render: (v: string) => <Text code>{NOTIFY_CN[v] || v}</Text>,
+    },
+    {
+      title: '接收人', dataIndex: 'notify_target', key: 'notify_target', width: 120,
+      render: (v: string | null) => v || <Text type="secondary">自己</Text>,
     },
     {
       title: '状态', dataIndex: 'done', key: 'done', width: 70,
@@ -174,7 +180,7 @@ export default function ScheduleManager() {
           <Tooltip title="手动触发">
             <Button size="small" icon={<PlayCircleOutlined />} onClick={() => handleTrigger(record.id)} />
           </Tooltip>
-          <Popconfirm title="删除此定时任务？" onConfirm={() => handleDelete(record.id)} okText="删除" cancelText="取消">
+          <Popconfirm title="删除此定时提醒？" onConfirm={() => handleDelete(record.id)} okText="删除" cancelText="取消">
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -186,7 +192,7 @@ export default function ScheduleManager() {
     <>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Title level={4} style={{ margin: 0 }}>定时任务管理</Title>
+          <Title level={4} style={{ margin: 0 }}>定时提醒管理</Title>
           <Text type="secondary">共 {total} 条</Text>
         </Col>
         <Col>
@@ -214,7 +220,7 @@ export default function ScheduleManager() {
       />
 
       <Modal
-        title={editing ? '编辑定时任务' : '新建定时任务'}
+        title={editing ? '编辑定时提醒' : '新建定时提醒'}
         open={modalOpen}
         onOk={handleSubmit}
         onCancel={() => setModalOpen(false)}
@@ -278,6 +284,22 @@ export default function ScheduleManager() {
               <Option value="wechat">微信</Option>
               <Option value="voice">语音</Option>
             </Select>
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, cur) => prev.notify_type !== cur.notify_type}
+          >
+            {({ getFieldValue }) =>
+              getFieldValue('notify_type') === 'wechat' ? (
+                <Form.Item
+                  name="notify_target"
+                  label="接收人（微信名/群名）"
+                  help="留空则发给创建者自己"
+                >
+                  <Input placeholder="例如：学霸乔宝专项配套办公室" />
+                </Form.Item>
+              ) : null
+            }
           </Form.Item>
           <Form.Item noStyle shouldUpdate={(prev, cur) => prev.strategy !== cur.strategy}>
             {({ getFieldValue }) => {

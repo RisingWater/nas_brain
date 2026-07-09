@@ -14,30 +14,36 @@ def _init_table():
     conn = db.get_connection()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS schedules (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id     TEXT NOT NULL,
-            content     TEXT NOT NULL,
-            rtype       TEXT NOT NULL DEFAULT 'once',
-            rdatetime   TEXT,
-            lunar       INTEGER DEFAULT 0,
-            strategy    TEXT NOT NULL DEFAULT 'direct',
-            prompt      TEXT,
-            notify_type TEXT NOT NULL DEFAULT 'wechat',
-            done        INTEGER DEFAULT 0,
-            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id       TEXT NOT NULL,
+            content       TEXT NOT NULL,
+            rtype         TEXT NOT NULL DEFAULT 'once',
+            rdatetime     TEXT,
+            lunar         INTEGER DEFAULT 0,
+            strategy      TEXT NOT NULL DEFAULT 'direct',
+            prompt        TEXT,
+            notify_type   TEXT NOT NULL DEFAULT 'wechat',
+            notify_target TEXT,
+            done          INTEGER DEFAULT 0,
+            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # 兼容旧表：如果 notify_target 列不存在则添加
+    try:
+        conn.execute("ALTER TABLE schedules ADD COLUMN notify_target TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # 列已存在
     conn.commit()
 
 
-# 启动时建表
 _init_table()
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
     return {
         "id": row["id"],
-        "user_id": row["user_id"],
+        "creator_id": row["user_id"],
         "content": row["content"],
         "rtype": row["rtype"],
         "rdatetime": row["rdatetime"],
@@ -45,6 +51,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
         "strategy": row["strategy"],
         "prompt": row["prompt"],
         "notify_type": row["notify_type"],
+        "notify_target": row["notify_target"] if "notify_target" in row.keys() else None,
         "done": bool(row["done"]),
         "created_at": row["created_at"],
     }
@@ -54,10 +61,10 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
 def add_schedule(req: AddScheduleRequest):
     conn = db.get_connection()
     cursor = conn.execute(
-        """INSERT INTO schedules (user_id, content, rtype, rdatetime, lunar, strategy, prompt, notify_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (req.user_id, req.content, req.rtype, req.rdatetime or None,
-         1 if req.lunar else 0, req.strategy, req.prompt, req.notify_type),
+        """INSERT INTO schedules (user_id, content, rtype, rdatetime, lunar, strategy, prompt, notify_type, notify_target)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (req.creator_id, req.content, req.rtype, req.rdatetime or None,
+         1 if req.lunar else 0, req.strategy, req.prompt, req.notify_type, req.notify_target),
     )
     conn.commit()
     return {"success": True, "id": cursor.lastrowid}
@@ -85,11 +92,9 @@ def list_schedules(
         params.append(f"%{keyword}%")
     where = " AND ".join(conditions) if conditions else "1=1"
 
-    # total
     total_row = conn.execute(f"SELECT COUNT(*) FROM schedules WHERE {where}", params).fetchone()
     total = total_row[0]
 
-    # page
     cursor = conn.execute(
         f"SELECT * FROM schedules WHERE {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
         (*params, limit, offset),
@@ -120,6 +125,7 @@ def update_schedule(schedule_id: int, req: UpdateScheduleRequest):
     for key, col in [
         ("content", "content"), ("rtype", "rtype"), ("rdatetime", "rdatetime"),
         ("strategy", "strategy"), ("prompt", "prompt"), ("notify_type", "notify_type"),
+        ("notify_target", "notify_target"),
     ]:
         val = getattr(req, key, None)
         if val is not None:

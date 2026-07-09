@@ -203,6 +203,22 @@ async def proxy_schedules_path(path: str, request: Request):
     return await _proxy_to_schedule(f"/api/schedules/{path}", request)
 
 
+# ---- 代理 /api/detectors → schedule_services:9040 ----
+@app.api_route("/api/detectors", methods=["GET"])
+async def proxy_detectors_list(request: Request):
+    return await _proxy_to_schedule("/api/detectors", request)
+
+
+@app.api_route("/api/detectors/reload", methods=["POST"])
+async def proxy_detectors_reload(request: Request):
+    return await _proxy_to_schedule("/api/detectors/reload", request)
+
+
+@app.api_route("/api/detectors/load", methods=["POST"])
+async def proxy_detectors_load(request: Request):
+    return await _proxy_to_schedule("/api/detectors/load", request)
+
+
 # 静态文件 — 前端构建产物
 _frontend_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
 _frontend_dist = os.path.normpath(_frontend_dist)

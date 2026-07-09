@@ -21,6 +21,7 @@ class ReminderDetector(BaseDetector):
 
     name = "reminder"
     interval = 60  # 每分钟检查一次
+    visible = False  # 内置调度器，不在管理页面显示
 
     def __init__(self):
         super().__init__()
@@ -111,15 +112,31 @@ class ReminderDetector(BaseDetector):
         strategy = s.get("strategy", "direct")
         notify_type = s.get("notify_type", "wechat")
         content = s.get("content", "")
-        user_id = s.get("user_id", "")
+        user_id = s.get("creator_id", s.get("user_id", ""))
+        notify_target = s.get("notify_target", "") or ""
 
         if strategy == "smart":
             self._dispatch_smart(s)
         else:
             if notify_type == "wechat":
-                ctx.send_wechat(who=user_id, msg=f"🔔 {content}")
+                # notify_target 优先，空则查创建者的微信名
+                who = notify_target or self._resolve_wechat_name(user_id) or user_id
+                ctx.send_wechat(who=who, msg=f"🔔 {content}")
             elif notify_type == "voice":
                 ctx.speak_voice(text=content)
+
+    def _resolve_wechat_name(self, user_id: str) -> str | None:
+        """通过 user_id 查用户的 wechat_name"""
+        try:
+            import requests
+            from src.common.utils import cfg
+            url = cfg.get_service_url("db_services", f"/api/users/{user_id}")
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                return resp.json().get("wechat_name")
+        except Exception as e:
+            logger.error("查询用户 %s 微信名失败: %s", user_id, e)
+        return None
 
     def _dispatch_smart(self, s: dict):
         """smart 策略 — POST brain_services"""
@@ -141,7 +158,7 @@ class ReminderDetector(BaseDetector):
                 request_id=f"sched_{uuid.uuid4().hex[:12]}",
                 timestamp=datetime.now(),
                 chat_type=ChatType.PRIVATE,
-                user_id=s.get("user_id", ""),
+                user_id=s.get("creator_id", s.get("user_id", "")),
                 content_type=ContentType.TEXT,
                 content=prompt,
             )

@@ -1,6 +1,6 @@
 export interface Schedule {
   id: number;
-  user_id: string;
+  creator_id: string;
   content: string;
   rtype: string;
   rdatetime: string | null;
@@ -8,6 +8,7 @@ export interface Schedule {
   strategy: string;
   prompt: string | null;
   notify_type: string;
+  notify_target: string | null;
   done: boolean;
   created_at: string;
 }

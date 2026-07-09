@@ -7,25 +7,25 @@ from src.common.clients.kv_store import kv_store
 logger = logging.getLogger("schedule_services.detector.dsm")
 
 router_data = [
-#    {
-#        "name": "乔宝",
-#        "detectors": [
-#            {
-#                "chatname": "学霸乔宝专项配套办公室",
-#                "text": "王煜乔已经到家啦",
-#                "type": "notify",
-#            }
-#        ]
-#    },
-#    {
-#        "name": "顶子",
-#        "detectors": [
-#            {
-#                "text": "王旭，欢迎回家",
-#                "type": "audio_play"
-#            }
-#        ]
-#    }
+    {
+        "name": "乔宝",
+        "detectors": [
+            {
+                "chatname": "学霸乔宝专项配套办公室",
+                "text": "王煜乔已经到家啦",
+                "type": "notify",
+            }
+        ]
+    },
+    {
+        "name": "顶子",
+        "detectors": [
+            {
+                "text": "王旭，欢迎回家",
+                "type": "audio_play"
+            }
+        ]
+    }
 ]
 
 

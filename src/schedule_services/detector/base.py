@@ -45,6 +45,7 @@ class BaseDetector:
     name: str = ""
     interval: int = 60  # 运行间隔（秒）
     last_run: float = 0
+    visible: bool = True  # 是否在管理页面显示
 
     def __init__(self):
         if not self.name:
@@ -80,7 +81,12 @@ class DetectorRegistry:
         return self._detectors.get(name)
 
     def get_all(self) -> list[BaseDetector]:
+        """返回所有 detector（含不可见的），供调度器使用"""
         return list(self._detectors.values())
+
+    def get_visible(self) -> list[BaseDetector]:
+        """只返回 visible=True 的，供管理页面使用"""
+        return [d for d in self._detectors.values() if d.visible]
 
     def clear(self):
         self._detectors.clear()
@@ -92,7 +98,7 @@ class DetectorRegistry:
                 "interval": d.interval,
                 "class": d.__class__.__name__,
             }
-            for d in self._detectors.values()
+            for d in self.get_visible()
         ]
 
 

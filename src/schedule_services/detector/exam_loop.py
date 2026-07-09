@@ -6,7 +6,7 @@ from src.common.clients.kv_store import kv_store
 logger = logging.getLogger("schedule_services.detector.exam")
 
 router_data = [
-#    {"chatname": "学霸乔宝专项配套办公室"},
+    {"chatname": "学霸乔宝专项配套办公室"},
 ]
 
 
