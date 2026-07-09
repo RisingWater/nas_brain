@@ -27,7 +27,12 @@ class BaseTool:
     def schema(self) -> dict:
         return self._schema
 
-    def execute(self, args: dict) -> str:
+    def execute(self, args: dict) -> dict:
+        """执行工具，返回 {"text": "回复文字", "files": ["/path/to/file", ...]}
+
+        - text: 必填，回复给用户的文字
+        - files: 可选，临时文件路径列表（由 agent route 发送后清理）
+        """
         raise NotImplementedError
 
     def to_dict(self) -> dict:
@@ -70,15 +75,24 @@ class ToolRegistry:
     def get_schemas(self) -> list[dict]:
         return [t.schema for t in self._tools.values()]
 
-    def execute(self, name: str, arguments: dict) -> str:
+    def execute(self, name: str, arguments: dict) -> dict:
+        """执行工具，返回 {"text": str, "files": list[str]}
+
+        兼容旧格式：如果工具返回 str，自动包装为 dict。
+        """
         tool = self._tools.get(name)
         if not tool:
-            return f"未知工具: {name}"
+            return {"text": f"未知工具: {name}", "files": []}
         try:
-            return tool.execute(arguments)
+            result = tool.execute(arguments)
+            if isinstance(result, str):
+                return {"text": result, "files": []}
+            if isinstance(result, dict):
+                return result
+            return {"text": str(result), "files": []}
         except Exception as e:
             logger.exception("工具 %s 执行失败", name)
-            return f"工具调用失败: {e}"
+            return {"text": f"工具调用失败: {e}", "files": []}
 
     def clear(self):
         self._tools.clear()

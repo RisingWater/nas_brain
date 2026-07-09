@@ -21,10 +21,10 @@ class WebSearchTool(BaseTool):
             },
         )
 
-    def execute(self, args: dict) -> str:
+    def execute(self, args: dict) -> dict:
         query = args.get("query", "").strip()
         if not query:
-            return "搜索失败：查询内容为空"
+            return {"text": "搜索失败：查询内容为空"}
 
         claude_bin = os.getenv("CLAUDE_BIN", "claude")
         prompt = f"请搜索网络获取以下信息，并给出简洁的总结：{query}"
@@ -38,14 +38,14 @@ class WebSearchTool(BaseTool):
             )
             output = (result.stdout or "").strip()
             if not output and result.stderr:
-                return f"搜索失败：{(result.stderr or '')[:300]}"
-            return output or "搜索未返回结果"
+                return {"text": f"搜索失败：{(result.stderr or '')[:300]}"}
+            return {"text": output or "搜索未返回结果"}
         except subprocess.TimeoutExpired:
-            return "搜索超时，请稍后重试"
+            return {"text": "搜索超时，请稍后重试"}
         except FileNotFoundError:
-            return "搜索失败：找不到 claude CLI，请确认已安装 Claude Code"
+            return {"text": "搜索失败：找不到 claude CLI，请确认已安装 Claude Code"}
         except Exception as e:
-            return f"搜索失败：{e}"
+            return {"text": f"搜索失败：{e}"}
 
 
 registry.register(WebSearchTool())

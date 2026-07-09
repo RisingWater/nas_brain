@@ -79,7 +79,7 @@ class WeatherTool(BaseTool):
             },
         )
 
-    def execute(self, args: dict) -> str:
+    def execute(self, args: dict) -> dict:
         city = args.get("city", "")
         date = args.get("date", "today")
         try:
@@ -94,10 +94,10 @@ class WeatherTool(BaseTool):
             resolved = area_list[0]["areaName"][0]["value"] if area_list else (city or "当前地区")
             weather_list = data.get("weather", [])
             if not weather_list:
-                return f"未找到 {resolved} 的天气信息"
+                return {"text": f"未找到 {resolved} 的天气信息"}
             idx = 0 if date == "today" else 1
             if idx >= len(weather_list):
-                return f"暂无 {resolved} 未来天气数据"
+                return {"text": f"暂无 {resolved} 未来天气数据"}
             summary = _summarize_day(weather_list[idx])
             label = "今天" if date == "today" else "明天"
             result = f"{resolved} {label}天气:\n  {summary}"
@@ -109,11 +109,9 @@ class WeatherTool(BaseTool):
                     result += (f"\n  当前: {_translate(desc_en)}, 气温 {c['temp_C']}°C, "
                                f"体感 {c['FeelsLikeC']}°C, 湿度 {c['humidity']}%, "
                                f"风速 {c['winddir16Point']} {c['windspeedKmph']}km/h")
-            return result
-        except requests.RequestException:
-            return "查询天气失败：无法连接天气服务"
+            return {"text": result}
         except Exception as e:
-            return f"查询天气失败: {e}"
+            return {"text": f"查询天气失败: {e}"}
 
 
 registry.register(WeatherTool())

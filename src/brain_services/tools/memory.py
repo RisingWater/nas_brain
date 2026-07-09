@@ -22,7 +22,6 @@ def _save_fact(fact: str) -> str:
         return "未提供要记录的内容"
     os.makedirs(os.path.dirname(_MEMORY_FILE) or ".", exist_ok=True)
 
-    # 去重检查
     try:
         if os.path.exists(_MEMORY_FILE):
             with open(_MEMORY_FILE, encoding="utf-8") as f:
@@ -49,8 +48,8 @@ class ReadMemoryTool(BaseTool):
             silent=True,
         )
 
-    def execute(self, args: dict) -> str:
-        return _read_raw()
+    def execute(self, args: dict) -> dict:
+        return {"text": _read_raw()}
 
 
 class SaveMemoryTool(BaseTool):
@@ -68,8 +67,8 @@ class SaveMemoryTool(BaseTool):
             silent=True,
         )
 
-    def execute(self, args: dict) -> str:
-        return _save_fact(args.get("fact", ""))
+    def execute(self, args: dict) -> dict:
+        return {"text": _save_fact(args.get("fact", ""))}
 
 
 registry.register(ReadMemoryTool())

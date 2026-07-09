@@ -16,11 +16,11 @@ class DoorTool(BaseTool):
             silent=True, final=True,
         )
 
-    def execute(self, args: dict) -> str:
+    def execute(self, args: dict) -> dict:
         url = os.getenv("DOOR_OPEN_URL", "")
         token = os.getenv("DOOR_OPEN_TOKEN", "")
         if not url:
-            return "门禁开门未配置（缺少 DOOR_OPEN_URL）"
+            return {"text": "门禁开门未配置（缺少 DOOR_OPEN_URL）"}
         headers = {
             "Authorization": f"bearer {token}",
             "Accept": "application/json, text/plain, */*",
@@ -33,10 +33,10 @@ class DoorTool(BaseTool):
             data = resp.json()
             if data.get("code") == "00000":
                 logger.info("开门成功")
-                return "楼下的门已打开"
-            return f"开门失败: {data.get('msg', '未知错误')}"
+                return {"text": "楼下的门已打开"}
+            return {"text": f"开门失败: {data.get('msg', '未知错误')}"}
         except requests.RequestException as e:
-            return f"开门失败: {e}"
+            return {"text": f"开门失败: {e}"}
 
 
 registry.register(DoorTool())

@@ -60,36 +60,36 @@ class ControlPs5Tool(BaseTool):
             silent=True, final=True,
         )
 
-    def execute(self, args: dict) -> str:
-        if not _HA_URL: return "Home Assistant 未配置"
+    def execute(self, args: dict) -> dict:
+        if not _HA_URL: return {"text": "Home Assistant 未配置"}
         power = args["power"]
         try:
             if power:
                 am = _is_audio_mode()
-                if am is None: return "无法获取电视状态"
+                if am is None: return {"text": "无法获取电视状态"}
                 if am:
                     eid = _find_entity(f"button.{_MITV_PREFIX}", "turn_mode_off")
-                    if not eid: return "没有找到电视按钮"
+                    if not eid: return {"text": "没有找到电视按钮"}
                     _press_button(eid)
                     time.sleep(1)
                 ps5 = _find_entity("switch.", "ps5") or _find_entity("media_player.", "playstation")
-                if not ps5: return "未找到 PS5 设备"
+                if not ps5: return {"text": "未找到 PS5 设备"}
                 _call_service(ps5.split(".")[0], "turn_on", ps5)
                 time.sleep(3)
                 tv = _find_entity(f"media_player.{_MITV_PREFIX}")
                 if tv:
                     _call_service("media_player", "select_source", tv, {"source": "HDMI 1"})
-                    return "PS5 已开启，电视已切换到 HDMI 1，开始享受游戏吧！"
-                return "PS5 已开启，请手动切换到 HDMI 1"
+                    return {"text": "PS5 已开启，电视已切换到 HDMI 1，开始享受游戏吧！"}
+                return {"text": "PS5 已开启，请手动切换到 HDMI 1"}
             else:
                 ps5 = _find_entity("switch.", "ps5") or _find_entity("media_player.", "playstation")
                 if ps5:
                     _call_service(ps5.split(".")[0], "turn_off", ps5)
                 eid = _find_entity(f"button.{_MITV_PREFIX}", "turn_mode_on")
                 if eid: _press_button(eid)
-                return "PS5 已关闭"
+                return {"text": "PS5 已关闭"}
         except Exception as e:
-            return f"PS5 控制失败：{e}"
+            return {"text": f"PS5 控制失败：{e}"}
 
 
 registry.register(ControlPs5Tool())

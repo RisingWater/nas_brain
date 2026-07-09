@@ -59,7 +59,7 @@ class AddReminderTool(BaseTool):
             final=True,
         )
 
-    def execute(self, args: dict) -> str:
+    def execute(self, args: dict) -> dict:
         try:
             data = {
                 "creator_id": "u_system",
@@ -77,10 +77,10 @@ class AddReminderTool(BaseTool):
                 msg = f"提醒已设置：{args['content']}"
                 if args.get("notify_target"):
                     msg += f"（通知：{args['notify_target']}）"
-                return msg
-            return f"设置失败：{result}"
+                return {"text": msg}
+            return {"text": f"设置失败：{result}"}
         except Exception as e:
-            return f"添加提醒失败：{e}"
+            return {"text": f"添加提醒失败：{e}"}
 
 
 class ListRemindersTool(BaseTool):
@@ -92,22 +92,22 @@ class ListRemindersTool(BaseTool):
             silent=True,
         )
 
-    def execute(self, args: dict) -> str:
+    def execute(self, args: dict) -> dict:
         try:
             result = _call("GET", "", params={"done": "false"})
             if not result:
-                return "查询失败"
+                return {"text": "查询失败"}
             schedules = result.get("data", {}).get("schedules", [])
             if not schedules:
-                return "没有待执行的提醒"
+                return {"text": "没有待执行的提醒"}
             lines = []
             for s in schedules:
                 target = s.get("notify_target") or "自己"
                 lines.append(f"#{s['id']} [{_TYPE_CN.get(s['rtype'], s['rtype'])}] "
                              f"{s['rdatetime'] or ''} → {target} — {s['content']}")
-            return "\n".join(lines)
+            return {"text": "\n".join(lines)}
         except Exception as e:
-            return f"查询失败：{e}"
+            return {"text": f"查询失败：{e}"}
 
 
 class DeleteReminderTool(BaseTool):
@@ -123,14 +123,14 @@ class DeleteReminderTool(BaseTool):
             silent=True, final=True,
         )
 
-    def execute(self, args: dict) -> str:
+    def execute(self, args: dict) -> dict:
         try:
             result = _call("DELETE", f"/{args['reminder_id']}")
             if result and result.get("code") == 200:
-                return "提醒已删除"
-            return f"删除失败：{result}"
+                return {"text": "提醒已删除"}
+            return {"text": f"删除失败：{result}"}
         except Exception as e:
-            return f"删除失败：{e}"
+            return {"text": f"删除失败：{e}"}
 
 
 registry.register(AddReminderTool())

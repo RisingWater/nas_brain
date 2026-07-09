@@ -51,12 +51,12 @@ class GetVolumeTool(BaseTool):
             silent=True,
         )
 
-    def execute(self, args: dict) -> str:
-        if not _HAS_PA: return "音量控制仅支持 Linux PulseAudio"
+    def execute(self, args: dict) -> dict:
+        if not _HAS_PA: return {"text": "音量控制仅支持 Linux PulseAudio"}
         try:
-            return f"当前音量 {_get_volume()}%"
+            return {"text": f"当前音量 {_get_volume()}%"}
         except Exception as e:
-            return f"获取音量失败：{e}"
+            return {"text": f"获取音量失败：{e}"}
 
 
 class SetVolumeTool(BaseTool):
@@ -72,15 +72,15 @@ class SetVolumeTool(BaseTool):
             silent=True, final=True,
         )
 
-    def execute(self, args: dict) -> str:
-        if not _HAS_PA: return "音量控制仅支持 Linux PulseAudio"
+    def execute(self, args: dict) -> dict:
+        if not _HAS_PA: return {"text": "音量控制仅支持 Linux PulseAudio"}
         vol = max(0, min(200, int(args["volume"])))
         try:
             subprocess.run(["pactl", "set-sink-volume", _SINK, f"{vol}%"],
                            capture_output=True, check=True, timeout=5)
-            return f"音量已经设置为百分之{_cn(vol)}"
+            return {"text": f"音量已经设置为百分之{_cn(vol)}"}
         except Exception as e:
-            return f"设置音量失败：{e}"
+            return {"text": f"设置音量失败：{e}"}
 
 
 if sys.platform != "win32":

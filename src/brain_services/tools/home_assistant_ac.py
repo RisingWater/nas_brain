@@ -73,13 +73,13 @@ class ListAcTool(BaseTool):
             silent=True,
         )
 
-    def execute(self, args: dict) -> str:
-        if not _HA_URL: return "Home Assistant 未配置（缺少 HOME_ASSISTANT_URL）"
+    def execute(self, args: dict) -> dict:
+        if not _HA_URL: return {"text": "Home Assistant 未配置（缺少 HOME_ASSISTANT_URL）"}
         try:
             acs = _list_climate()
-            return "\n".join(_fmt_ac(a) for a in acs) if acs else "没有找到空调设备"
+            return {"text": "\n".join(_fmt_ac(a) for a in acs) if acs else "没有找到空调设备"}
         except Exception as e:
-            return f"查询空调失败：{e}"
+            return {"text": f"查询空调失败：{e}"}
 
 
 class ControlAcTool(BaseTool):
@@ -100,35 +100,35 @@ class ControlAcTool(BaseTool):
             silent=True, final=True,
         )
 
-    def execute(self, args: dict) -> str:
-        if not _HA_URL: return "Home Assistant 未配置"
+    def execute(self, args: dict) -> dict:
+        if not _HA_URL: return {"text": "Home Assistant 未配置"}
         action, name, value = args.get("action"), args.get("name", ""), args.get("value", "")
         try:
             if not name:
                 names = [a["name"] for a in _list_climate()]
-                return f"请指定空调：{', '.join(names)}"
+                return {"text": f"请指定空调：{', '.join(names)}"}
             entity_id = _find_entity(name)
-            if not entity_id: return f"未找到'{name}'"
+            if not entity_id: return {"text": f"未找到'{name}'"}
             friendly = name if name.endswith("空调") else f"{name}空调"
             if action == "on":
                 _call_service("climate", "turn_on", entity_id)
-                return f"{friendly}已开启"
+                return {"text": f"{friendly}已开启"}
             elif action == "off":
                 _call_service("climate", "turn_off", entity_id)
-                return f"{friendly}已关闭"
+                return {"text": f"{friendly}已关闭"}
             elif action == "set_temp":
-                if not value: return "请指定温度"
+                if not value: return {"text": "请指定温度"}
                 _call_service("climate", "set_hvac_mode", entity_id, {"hvac_mode": "cool"})
                 _call_service("climate", "set_temperature", entity_id, {"temperature": float(value)})
-                return f"{friendly}温度已设置为{_cn(int(float(value)))}度"
+                return {"text": f"{friendly}温度已设置为{_cn(int(float(value)))}度"}
             elif action == "set_mode":
                 valid = {"cool", "heat", "auto", "dry", "fan_only"}
-                if value not in valid: return f"无效模式，可选：{', '.join(sorted(valid))}"
+                if value not in valid: return {"text": f"无效模式，可选：{', '.join(sorted(valid))}"}
                 _call_service("climate", "set_hvac_mode", entity_id, {"hvac_mode": value})
-                return f"{friendly}已切换为{value}"
-            return f"未知操作: {action}"
+                return {"text": f"{friendly}已切换为{value}"}
+            return {"text": f"未知操作: {action}"}
         except Exception as e:
-            return f"空调控制失败：{e}"
+            return {"text": f"空调控制失败：{e}"}
 
 
 registry.register(ListAcTool())

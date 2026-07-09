@@ -49,14 +49,14 @@ class GetTvStateTool(BaseTool):
             silent=True,
         )
 
-    def execute(self, args: dict) -> str:
-        if not _HA_URL: return "Home Assistant 未配置"
+    def execute(self, args: dict) -> dict:
+        if not _HA_URL: return {"text": "Home Assistant 未配置"}
         try:
             am = _is_audio_mode()
-            if am is None: return "无法获取电视状态"
-            return "电视处于音响模式（屏幕关闭）" if am else "电视已打开（退出音响模式）"
+            if am is None: return {"text": "无法获取电视状态"}
+            return {"text": "电视处于音响模式（屏幕关闭）" if am else "电视已打开（退出音响模式）"}
         except Exception as e:
-            return f"查询失败：{e}"
+            return {"text": f"查询失败：{e}"}
 
 
 class ControlTvTool(BaseTool):
@@ -72,21 +72,21 @@ class ControlTvTool(BaseTool):
             silent=True, final=True,
         )
 
-    def execute(self, args: dict) -> str:
-        if not _HA_URL: return "Home Assistant 未配置"
+    def execute(self, args: dict) -> dict:
+        if not _HA_URL: return {"text": "Home Assistant 未配置"}
         try:
             if args["action"] == "on":
                 eid = _find_tv_button("turn_mode_off")
-                if not eid: return "没有找到电视开关按钮"
+                if not eid: return {"text": "没有找到电视开关按钮"}
                 _press_button(eid)
-                return "电视已打开"
+                return {"text": "电视已打开"}
             else:
                 eid = _find_tv_button("turn_mode_on")
-                if not eid: return "没有找到电视音响模式按钮"
+                if not eid: return {"text": "没有找到电视音响模式按钮"}
                 _press_button(eid)
-                return "电视已关闭（进入音响模式）"
+                return {"text": "电视已关闭（进入音响模式）"}
         except Exception as e:
-            return f"电视控制失败：{e}"
+            return {"text": f"电视控制失败：{e}"}
 
 
 registry.register(GetTvStateTool())
