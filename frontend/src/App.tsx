@@ -5,6 +5,7 @@ import ServiceManager from './pages/ServiceManager';
 import LogViewer from './pages/LogViewer';
 import ToolManager from './pages/ToolManager';
 import TTSCacheManager from './pages/TTSCacheManager';
+import ScheduleManager from './pages/ScheduleManager';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/logs" element={<LogViewer />} />
           <Route path="/tools" element={<ToolManager />} />
           <Route path="/tts-cache" element={<TTSCacheManager />} />
+          <Route path="/schedules" element={<ScheduleManager />} />
           <Route path="/" element={<Navigate to="/users" replace />} />
         </Route>
       </Routes>

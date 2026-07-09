@@ -172,6 +172,37 @@ async def proxy_tts_cache_clear(request: Request):
     return await _proxy_to_playback("/api/tts/cache", request)
 
 
+# ---- 代理 /api/schedules → schedule_services:9040 ----
+async def _proxy_to_schedule(path: str, request: Request) -> JSONResponse:
+    qs = request.url.query
+    url = f"http://127.0.0.1:9040{path}"
+    if qs:
+        url += f"?{qs}"
+    body = await request.body()
+    headers = {k: v for k, v in request.headers.items()
+               if k.lower() not in ("host", "content-length")}
+    try:
+        resp = await asyncio.to_thread(
+            _req.request, request.method, url, data=body, headers=headers, timeout=15,
+        )
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+    except Exception as e:
+        return JSONResponse(
+            content={"code": 502, "message": f"schedule_services 不可用: {e}", "data": None},
+            status_code=502,
+        )
+
+
+@app.api_route("/api/schedules", methods=["GET", "POST"])
+async def proxy_schedules_root(request: Request):
+    return await _proxy_to_schedule("/api/schedules", request)
+
+
+@app.api_route("/api/schedules/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_schedules_path(path: str, request: Request):
+    return await _proxy_to_schedule(f"/api/schedules/{path}", request)
+
+
 # 静态文件 — 前端构建产物
 _frontend_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
 _frontend_dist = os.path.normpath(_frontend_dist)

@@ -57,6 +57,9 @@ class LogManager:
     # ---- 初始化 ----
     def setup(self):
         """安装内存 + 磁盘日志处理器到根 logger，并接管 sys.excepthook"""
+        # 让根 logger 放过所有级别（由 handler 自己控制过滤）
+        logging.root.setLevel(logging.DEBUG)
+
         # 磁盘持久化
         _ensure_log_dir()
         file_handler = logging.handlers.RotatingFileHandler(

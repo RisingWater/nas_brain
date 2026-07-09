@@ -23,5 +23,10 @@
     "name": "playback_services",
     "description": "音频播放微服务",
     "command": "python -m uvicorn src.playback_services.app:app --host 0.0.0.0 --port 9041"
+  },
+  {
+    "name": "schedule_services",
+    "description": "定时任务微服务",
+    "command": "python -m uvicorn src.schedule_services.app:app --host 0.0.0.0 --port 9040"
   }
 ]

@@ -3,7 +3,7 @@ import os
 os.environ["LOG_SERVER_NAME"] = "db_services"
 
 from fastapi import FastAPI
-from .routes import users
+from .routes import users, schedules, kv
 from src.common.utils import cfg
 from src.common.utils import log_manager
 
@@ -13,6 +13,8 @@ app = FastAPI(
 )
 
 app.include_router(users.router, prefix="/api/users", tags=["用户管理"])
+app.include_router(schedules.router, prefix="/api/schedules", tags=["定时任务"])
+app.include_router(kv.router, prefix="/api/kv", tags=["KV 存储"])
 
 @app.get("/health")
 async def health():

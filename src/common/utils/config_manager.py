@@ -19,6 +19,7 @@ _SERVICE_PORTS: dict[str, tuple[str, str]] = {
     "wechat_gateway":   ("WECHAT_GATEWAY_PORT",  "9030"),
     "brain_services":   ("BRAIN_SERVICE_PORT",   "9031"),
     "playback_services": ("PLAYBACK_SERVICE_PORT", "9041"),
+    "schedule_services": ("SCHEDULE_SERVICE_PORT", "9040"),
     "timer_services":   ("TIMER_SERVICE_PORT",   "9040"),
 }
 

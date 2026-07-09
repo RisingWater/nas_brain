@@ -1,26 +1,32 @@
-"""定时提醒工具 — 文件存储，添加/列出/删除"""
-import json
-import os
+"""定时提醒工具 — 通过 schedule_services API 管理，替代原有 JSON 文件"""
 import logging
+import requests
 from datetime import datetime
+from src.common.utils import cfg
 from . import BaseTool, registry
 
 logger = logging.getLogger("brain_services.tools.reminder")
 
-_REMINDER_FILE = os.getenv("REMINDER_FILE", "data/reminders.json")
+_SCHEDULE_URL = cfg.get_service_url("schedule_services", "/api/schedules")
 
 
-def _load() -> list:
-    if not os.path.exists(_REMINDER_FILE):
-        return []
-    with open(_REMINDER_FILE, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _save(reminders: list):
-    os.makedirs(os.path.dirname(_REMINDER_FILE) or ".", exist_ok=True)
-    with open(_REMINDER_FILE, "w", encoding="utf-8") as f:
-        json.dump(reminders, f, ensure_ascii=False, indent=2)
+def _call(method: str, path: str = "", json_data: dict = None, params: dict = None) -> dict | None:
+    """调用 schedule_services API"""
+    url = f"{_SCHEDULE_URL}{path}"
+    try:
+        if method == "GET":
+            resp = requests.get(url, params=params, timeout=10)
+        elif method == "POST":
+            resp = requests.post(url, json=json_data, timeout=10)
+        elif method == "DELETE":
+            resp = requests.delete(url, timeout=10)
+        else:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.error("schedule_services 调用失败: %s", e)
+        return None
 
 
 class AddReminderTool(BaseTool):
@@ -44,18 +50,18 @@ class AddReminderTool(BaseTool):
 
     def execute(self, args: dict) -> str:
         try:
-            reminders = _load()
-            new_id = max((r["id"] for r in reminders), default=0) + 1
-            reminders.append({
-                "id": new_id,
+            data = {
+                "user_id": "u_system",
                 "content": args["content"],
                 "rtype": args["rtype"],
-                "datetime": args["datetime"],
-                "created_at": datetime.now().isoformat(),
-                "done": False,
-            })
-            _save(reminders)
-            return f"提醒已设置：{args['content']}"
+                "rdatetime": args["datetime"],
+                "strategy": "direct",
+                "notify_type": "wechat",
+            }
+            result = _call("POST", "", json_data=data)
+            if result and result.get("code") == 201:
+                return f"提醒已设置：{args['content']}"
+            return f"设置失败：{result}"
         except Exception as e:
             return f"添加提醒失败：{e}"
 
@@ -71,14 +77,17 @@ class ListRemindersTool(BaseTool):
 
     def execute(self, args: dict) -> str:
         try:
-            reminders = [r for r in _load() if not r.get("done")]
-            if not reminders:
+            result = _call("GET", "", params={"done": "false"})
+            if not result:
+                return "查询失败"
+            schedules = result.get("data", {}).get("schedules", [])
+            if not schedules:
                 return "没有待执行的提醒"
             lines = []
             type_cn = {"once": "一次性", "daily": "每天", "monthly": "每月"}
-            for r in reminders:
-                lines.append(f"#{r['id']} [{type_cn.get(r['rtype'], r['rtype'])}] "
-                             f"{r['datetime']} — {r['content']}")
+            for s in schedules:
+                lines.append(f"#{s['id']} [{type_cn.get(s['rtype'], s['rtype'])}] "
+                             f"{s['rdatetime'] or ''} — {s['content']}")
             return "\n".join(lines)
         except Exception as e:
             return f"查询失败：{e}"
@@ -99,10 +108,10 @@ class DeleteReminderTool(BaseTool):
 
     def execute(self, args: dict) -> str:
         try:
-            reminders = _load()
-            reminders = [r for r in reminders if r["id"] != args["reminder_id"]]
-            _save(reminders)
-            return "提醒已经删除"
+            result = _call("DELETE", f"/{args['reminder_id']}")
+            if result and result.get("code") == 200:
+                return "提醒已删除"
+            return f"删除失败：{result}"
         except Exception as e:
             return f"删除失败：{e}"
 

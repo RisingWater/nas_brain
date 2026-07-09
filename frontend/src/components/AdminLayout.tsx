@@ -8,6 +8,7 @@ import {
   FileTextOutlined,
   ToolOutlined,
   SoundOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -19,6 +20,7 @@ const menuItems = [
   { key: '/logs', icon: <FileTextOutlined />, label: '日志查看' },
   { key: '/tools', icon: <ToolOutlined />, label: '工具管理' },
   { key: '/tts-cache', icon: <SoundOutlined />, label: 'TTS 缓存' },
+  { key: '/schedules', icon: <ClockCircleOutlined />, label: '定时任务' },
 ];
 
 export default function AdminLayout() {
