@@ -1,5 +1,6 @@
 """LLM 上下文构建器 — 组装三层记忆 + system prompt"""
 import os
+import json
 import logging
 import requests
 from src.common.utils import cfg
@@ -27,7 +28,8 @@ class LLMContextBuilder:
     """按时间段构建 LLM 上下文：system + 长期 + 中期 + 短期 + 当前消息"""
 
     def build(self, user_id: str, config: dict, current_msg: str,
-              protocol: str = "wechat", chat_type: str = "private") -> list[dict]:
+              protocol: str = "wechat", chat_type: str = "private",
+              exclude_msg_id: int | None = None) -> list[dict]:
         """构建 OpenAI-format messages 列表"""
         messages = []
 
@@ -81,7 +83,7 @@ class LLMContextBuilder:
 
         # 4. Short-term memory (recent chat_messages)
         window_minutes = config.get("short_term_window", 30)
-        short_term = self._get_short_term_history(user_id, window_minutes)
+        short_term = self._get_short_term_history(user_id, window_minutes, exclude_msg_id)
         for msg in short_term:
             messages.append(msg)
 
@@ -102,11 +104,11 @@ class LLMContextBuilder:
             pass
         return None
 
-    def _get_short_term_history(self, user_id: str, window_minutes: int) -> list[dict]:
-        """获取短期记忆（最近 N 分钟内的消息）"""
+    def _get_short_term_history(self, user_id: str, window_minutes: int,
+                                 exclude_id: int | None = None) -> list[dict]:
+        """获取短期记忆（最近 N 分钟内的消息），可选排除某条 ID"""
         try:
             url = cfg.get_service_url("db_services", f"/api/chat-messages/{user_id}")
-            # 用 since_time 做时间过滤
             import datetime
             since = (datetime.datetime.utcnow() - datetime.timedelta(minutes=window_minutes))
             resp = requests.get(url, params={
@@ -115,25 +117,62 @@ class LLMContextBuilder:
             }, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
+                logger.info("短期记忆: since_time=%s, total=%d, 消息IDs=%s",
+                             since.strftime("%Y-%m-%d %H:%M:%S"),
+                             data.get("total"),
+                             [m.get("id") for m in data.get("messages", [])])
                 result = []
                 for msg in data.get("messages", []):
+                    if exclude_id is not None and msg.get("id") == exclude_id:
+                        continue
                     role = msg.get("role", "")
                     if role in ("user", "assistant"):
-                        result.append({
+                        entry = {
                             "role": role,
                             "content": msg.get("content") or "",
-                        })
+                        }
+                        # 恢复 tool_calls（存储在 DB 的 tool_calls 字段）
+                        tc = msg.get("tool_calls")
+                        if tc:
+                            entry["tool_calls"] = tc
+                        result.append(entry)
                     elif role == "tool":
+                        # 从 metadata 中恢复原始 tool_call_id
+                        meta = msg.get("metadata", {})
+                        if isinstance(meta, str):
+                            try:
+                                meta = json.loads(meta)
+                            except Exception:
+                                meta = {}
+                        tc_id = meta.get("tool_call_id", "") if isinstance(meta, dict) else ""
+                        tool_name = msg.get("tool_name") or ""
+                        tool_result = msg.get("tool_result") or {}
                         result.append({
                             "role": "tool",
-                            "content": f"工具 {msg.get('tool_name')} 返回: {msg.get('tool_result', {})}",
-                            "tool_call_id": str(msg.get("id", "")),
+                            "tool_call_id": tc_id,
+                            "content": json.dumps(tool_result, ensure_ascii=False),
                         })
                     elif role == "processor":
                         result.append({
                             "role": "assistant",
                             "content": f"[处理器 {msg.get('processor_name')}]: {msg.get('content')}",
                         })
+
+                # 修复缺失 tool_call_id 的 tool 消息：按顺序匹配前一条 assistant 的 tool_calls
+                tc_idx_map = {}  # 记录每个 assistant 消息后第几个 tool
+                for i, entry in enumerate(result):
+                    if entry.get("tool_calls"):
+                        tc_idx_map[i] = 0  # 从这个位置开始计数 tool
+                    elif entry.get("role") == "tool" and not entry.get("tool_call_id"):
+                        # 找到前面最近的 assistant 并依次分配 tool_call_id
+                        for j in range(i - 1, -1, -1):
+                            if result[j].get("tool_calls"):
+                                tc_list = result[j]["tool_calls"]
+                                idx = tc_idx_map.get(j, 0)
+                                if idx < len(tc_list):
+                                    entry["tool_call_id"] = tc_list[idx]["id"]
+                                    tc_idx_map[j] = idx + 1
+                                break
                 return result
         except Exception as e:
             logger.error("获取短期记忆失败: %s", e)

@@ -34,6 +34,10 @@ export async function searchChatHistory(
   return data;
 }
 
+export async function clearChatHistory(userId: string): Promise<void> {
+  await client.delete(`/admin/chat-messages/${userId}`);
+}
+
 export async function sendAgentRequest(
   userId: string,
   text: string,

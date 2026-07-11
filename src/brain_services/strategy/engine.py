@@ -124,6 +124,7 @@ class StrategyEngine:
             current_msg=req.content or "",
             protocol=req.protocol.value if hasattr(req.protocol, 'value') else str(req.protocol),
             chat_type=req.chat_type.value if hasattr(req.chat_type, 'value') else str(req.chat_type),
+            exclude_msg_id=user_msg_id,
         )
 
         # 过滤工具

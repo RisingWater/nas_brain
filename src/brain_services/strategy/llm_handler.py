@@ -88,21 +88,24 @@ class LLMHandler:
                 if files:
                     all_files.extend(files)
 
-                # 记录工具结果到 DB
-                self.recorder.record_tool_result(user_id, tool_name, result)
+                # 记录工具结果到 DB（含原始 tool_call_id）
+                self.recorder.record_tool_result(user_id, tool_name, result,
+                                                  tool_call_id=str(tc.get("id", "")))
 
                 # 检查是否为 final 工具
                 tool_obj = tool_registry.get(tool_name)
                 if tool_obj and tool_obj.final:
                     # final 工具：不送回 LLM，直接返回结果
-                    # 但需插入假的 tool + assistant 响应到 DB（保证上下文完整）
-                    fake_tool = {"role": "tool", "tool_call_id": str(tc.get("id", "")),
-                                 "content": json.dumps(result, ensure_ascii=False)}
-                    self.recorder.record(
-                        user_id, "tool", content=json.dumps(result, ensure_ascii=False),
-                        metadata={"tool_call_id": str(tc.get("id", "")), "_fake": True},
-                    )
+                    # 真正的工具调用结果已经由 record_tool_result 记录到 DB
+                    # 在内存中加入 tool 响应和 assistant 响应，保证上下文链完整
+                    tool_response = {"role": "tool", "tool_call_id": str(tc.get("id", "")),
+                                     "content": json.dumps(result, ensure_ascii=False)}
+                    assistant_response = {"role": "assistant", "content": result_text}
+                    # DB：记录 assistant 响应
                     self.recorder.record_assistant(user_id, result_text)
+                    # 内存
+                    messages.append(tool_response)
+                    messages.append(assistant_response)
                     has_final = True
                     final_text = result_text
                     break  # 跳出工具循环（不继续执行后面的工具）

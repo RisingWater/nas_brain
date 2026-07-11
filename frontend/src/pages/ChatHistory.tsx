@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import {
-  Select, Input, Button, Typography, Spin, Space, Tag, message,
+  Select, Input, Button, Typography, Spin, Space, Tag, message, Popconfirm,
   Row, Col,
 } from 'antd';
-import { SearchOutlined, ReloadOutlined, ArrowDownOutlined, SendOutlined } from '@ant-design/icons';
-import { getChatHistory, searchChatHistory, sendAgentRequest } from '../api/chatHistory';
+import { SearchOutlined, ReloadOutlined, ArrowDownOutlined, SendOutlined, DeleteOutlined } from '@ant-design/icons';
+import { getChatHistory, searchChatHistory, sendAgentRequest, clearChatHistory } from '../api/chatHistory';
 import type { ChatMessage } from '../api/chatHistory';
 import { listUsers } from '../api/strategy';
 
@@ -101,6 +101,18 @@ export default function ChatHistory() {
     }
   };
 
+  const handleClear = async () => {
+    if (!selectedUser) return;
+    try {
+      await clearChatHistory(selectedUser);
+      message.success('聊天记录已清空');
+      setMessages([]);
+      setHasMore(false);
+    } catch {
+      message.error('清空失败');
+    }
+  };
+
   const handleLoadMore = () => {
     if (!selectedUser || !hasMore || loadingMore) return;
     const oldest = messages[messages.length - 1];
@@ -185,6 +197,13 @@ export default function ChatHistory() {
         <Col>
           <Button icon={<ReloadOutlined />} onClick={() => selectedUser && handleUserChange(selectedUser)}
                   disabled={!selectedUser}>刷新</Button>
+        </Col>
+        <Col>
+          {selectedUser && (
+            <Popconfirm title="确定清空该用户所有聊天记录？" onConfirm={handleClear} okText="确定" cancelText="取消">
+              <Button icon={<DeleteOutlined />} danger>清空</Button>
+            </Popconfirm>
+          )}
         </Col>
       </Row>
 

@@ -90,7 +90,7 @@ class ControlAcTool(BaseTool):
             parameters={
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "空调名称，如'客厅'"},
+                    "name": {"type": "string", "description": "空调名称，如'客厅'。可从对话上下文推断，连续对话时可不传。"},
                     "action": {"type": "string", "enum": ["on", "off", "set_temp", "set_mode"],
                                "description": "on=开机, off=关机, set_temp=设温度, set_mode=切换模式"},
                     "value": {"type": "string", "description": "set_temp 时填温度数字, set_mode 时填 cool/heat/auto"},

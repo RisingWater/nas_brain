@@ -91,11 +91,14 @@ class ChatRecorder:
         )
 
     def record_tool_result(self, user_id: str, tool_name: str,
-                           tool_result: dict) -> int | None:
+                           tool_result: dict,
+                           tool_call_id: str | None = None) -> int | None:
         """记录工具执行结果"""
+        meta = {"tool_call_id": tool_call_id} if tool_call_id else {}
         return self.record(
             user_id=user_id, role="tool",
             tool_name=tool_name, tool_result=tool_result,
+            metadata=meta,
         )
 
     def record_processor(self, req: AgentRequest, processor_name: str,
