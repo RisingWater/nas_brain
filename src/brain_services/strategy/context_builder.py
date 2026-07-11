@@ -37,6 +37,32 @@ class LLMContextBuilder:
             system_prompt = _DEFAULT_SYSTEM_PROMPT
         messages.append({"role": "system", "content": system_prompt})
 
+        # 1b. 来源上下文
+        ctx_parts = []
+        if protocol == "wechat":
+            if chat_type == "group":
+                ctx_parts.append("你现在在微信群聊中，用户可能 @ 了你。")
+            else:
+                ctx_parts.append("你现在在微信私聊中。")
+        elif protocol == "voice":
+            ctx_parts.append(
+                "你正在通过语音与用户对话，回复会通过语音播放。\n"
+                "规则：\n"
+                "0. 判断用户输入是否值得回复。以下情况直接回复 __SKIP__（只回复这三个词）：\n"
+                "   - 单个字、语气词（嗯、啊、哦、哈、唉）\n"
+                "   - 闲聊寒暄、自言自语、不是对你说的对话\n"
+                "   - 语法不通、乱码、语音识别错误导致的无意义文本\n"
+                "   - 非指令性的陈述句（比如'今天好热'、'我饿了'）\n"
+                "1. 不要使用任何emoji、颜文字、特殊符号\n"
+                "2. 不要使用markdown格式\n"
+                "3. 用中文回答，语气活泼可爱\n"
+                "4. 回复尽量简短在1-2句话内\n"
+                "5. 使用口语化的表达方式\n"
+                "6. 数字用中文写（二十五而不是25），语音模型无法念阿拉伯数字"
+            )
+        if ctx_parts:
+            messages.append({"role": "system", "content": " ".join(ctx_parts)})
+
         # 2. Long-term memory (memory.md)
         long_term = _read_long_term_memory()
         if long_term:
@@ -101,7 +127,7 @@ class LLMContextBuilder:
                         result.append({
                             "role": "tool",
                             "content": f"工具 {msg.get('tool_name')} 返回: {msg.get('tool_result', {})}",
-                            "tool_call_id": msg.get("id"),
+                            "tool_call_id": str(msg.get("id", "")),
                         })
                     elif role == "processor":
                         result.append({

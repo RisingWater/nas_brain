@@ -147,6 +147,21 @@ class WeChatProcessor:
             )
             if resp.status_code == 200:
                 record_message()
+                data = resp.json().get("data", {})
+                reply_text = data.get("text", "")
+                if reply_text:
+                    logger.info("回复 %s: %.50s", chat_name, reply_text)
+                    self.wxauto.send_text_message(who=chat_name, msg=reply_text)
+                # 发送附件文件
+                for file_path in data.get("files", []):
+                    try:
+                        with open(file_path, "rb") as f:
+                            self.wxauto.send_file_data(
+                                who=chat_name, filename=os.path.basename(file_path), data=f.read(),
+                            )
+                        os.remove(file_path)
+                    except Exception as e:
+                        logger.error("发送文件失败: %s", e)
             else:
                 logger.warning("brain_services 返回 %s: %s", resp.status_code, resp.text)
         except requests.RequestException as e:

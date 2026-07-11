@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import {
   Select, Input, Button, Typography, Spin, Space, Tag, message,
-  Card, Row, Col, Divider,
+  Row, Col,
 } from 'antd';
-import { SearchOutlined, ReloadOutlined, ArrowDownOutlined } from '@ant-design/icons';
-import { getChatHistory, searchChatHistory } from '../api/chatHistory';
+import { SearchOutlined, ReloadOutlined, ArrowDownOutlined, SendOutlined } from '@ant-design/icons';
+import { getChatHistory, searchChatHistory, sendAgentRequest } from '../api/chatHistory';
 import type { ChatMessage } from '../api/chatHistory';
 import { listUsers } from '../api/strategy';
 
@@ -26,6 +26,8 @@ export default function ChatHistory() {
   const [hasMore, setHasMore] = useState(true);
   const [keyword, setKeyword] = useState('');
   const [searching, setSearching] = useState(false);
+  const [inputText, setInputText] = useState('');
+  const [sending, setSending] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 50;
 
@@ -74,6 +76,28 @@ export default function ChatHistory() {
       message.error('搜索失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSend = async () => {
+    if (!selectedUser || !inputText.trim() || sending) return;
+    const text = inputText.trim();
+    setInputText('');
+    setSending(true);
+    try {
+      await sendAgentRequest(selectedUser, text);
+      // 重新加载消息列表
+      const res = await getChatHistory(selectedUser, { limit: PAGE_SIZE });
+      setMessages(res.messages);
+      setHasMore(res.messages.length >= PAGE_SIZE);
+      // 滚动到底部
+      setTimeout(() => {
+        if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      }, 100);
+    } catch {
+      message.error('发送失败');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -192,6 +216,25 @@ export default function ChatHistory() {
               </div>
             )}
           </>
+        )}
+
+        {/* Web 聊天输入框 */}
+        {selectedUser && (
+          <div style={{ borderTop: '1px solid #e8e8e8', padding: '8px 0', display: 'flex', gap: 8 }}>
+            <Input.TextArea
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+              rows={2}
+              style={{ flex: 1 }}
+              disabled={sending}
+            />
+            <Button type="primary" icon={<SendOutlined />} onClick={handleSend} loading={sending}
+                    style={{ alignSelf: 'flex-end' }}>
+              发送
+            </Button>
+          </div>
         )}
       </div>
     </div>

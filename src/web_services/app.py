@@ -268,6 +268,16 @@ async def proxy_user_configs_detail(user_id: str, request: Request):
     return await _proxy_to_db(f"/api/user-configs/{user_id}", request)
 
 
+@app.api_route("/api/admin/chat-messages/single/{msg_id}", methods=["DELETE"])
+async def proxy_chat_messages_single(msg_id: int, request: Request):
+    return await _proxy_to_db(f"/api/chat-messages/single/{msg_id}", request)
+
+
+@app.api_route("/api/admin/chat-messages/{user_id}/last", methods=["DELETE"])
+async def proxy_chat_messages_last(user_id: str, request: Request):
+    return await _proxy_to_db(f"/api/chat-messages/{user_id}/last", request)
+
+
 @app.api_route("/api/admin/chat-messages/{user_id}", methods=["GET", "DELETE"])
 async def proxy_chat_messages(user_id: str, request: Request):
     return await _proxy_to_db(f"/api/chat-messages/{user_id}", request)
@@ -319,6 +329,12 @@ async def update_long_term_memory(request: Request):
 async def proxy_chat_summaries_list(user_id: str, request: Request):
     """获取用户的所有中期记忆"""
     return await _proxy_to_db(f"/api/chat-summaries/{user_id}/list", request)
+
+
+# ---- 代理 /api/admin/agent-request → brain_services:9031 ----
+@app.api_route("/api/admin/agent-request", methods=["POST"])
+async def proxy_agent_request(request: Request):
+    return await _proxy_to_brain("/api/agent-request", request)
 
 
 # 静态文件 — 前端构建产物

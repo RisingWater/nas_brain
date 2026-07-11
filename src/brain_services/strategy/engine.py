@@ -80,8 +80,8 @@ class StrategyEngine:
                 "skipped": True,
             })
 
-        # 2. 记录用户消息到 DB
-        self.recorder.record_user_message(req)
+        # 2. 记录用户消息到 DB，记录返回的 msg_id 用于后续可能的删除
+        user_msg_id = self.recorder.record_user_message(req)
 
         # 3. Ignore 策略：只记录不处理
         strategy = self.get_strategy(req, config)
@@ -111,11 +111,11 @@ class StrategyEngine:
 
         # 5. 按策略分流
         if strategy == "smart":
-            return self._process_smart(req, config)
+            return self._process_smart(req, config, user_msg_id)
         else:
             return self._process_direct(req)
 
-    def _process_smart(self, req: AgentRequest, config: dict) -> AgentResponse:
+    def _process_smart(self, req: AgentRequest, config: dict, user_msg_id: int | None = None) -> AgentResponse:
         """Smart 模式：LLM + 工具调用"""
         # 构建上下文
         messages = self.context_builder.build(
@@ -139,7 +139,22 @@ class StrategyEngine:
             tools=filtered_tools,
         )
 
-        # 处理附件
+        # __SKIP__：不回复，按 user_msg_id 删除该条消息
+        if reply and reply.strip() == "__SKIP__":
+            logger.info("LLM 返回 __SKIP__，跳过并删除消息 msg_id=%s", user_msg_id)
+            if user_msg_id:
+                try:
+                    import requests as _req
+                    url = cfg.get_service_url("db_services", f"/api/chat-messages/single/{user_msg_id}")
+                    _req.delete(url, timeout=5)
+                except Exception as e:
+                    logger.warning("删除 SKIP 消息失败: %s", e)
+            return AgentResponse(data={
+                "request_id": req.request_id,
+                "text": "",
+                "skipped": True,
+            })
+
         return AgentResponse(data={
             "request_id": req.request_id,
             "text": reply or "（无回复）",

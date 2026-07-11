@@ -1,11 +1,14 @@
 """LLM 处理器 — 函数调用循环"""
 import json
+import os
 import logging
 from src.common.clients.deepseek import DeepSeekAPI
 from ..tools import registry as tool_registry
 from .chat_recorder import ChatRecorder
 
 logger = logging.getLogger("brain_services.strategy.llm_handler")
+
+_DUMP = os.getenv("BRAIN_SERVICE_DUMP_MSG")
 
 
 class LLMHandler:
@@ -31,6 +34,9 @@ class LLMHandler:
             iteration += 1
             logger.debug("LLM 调用迭代 #%d, 消息数=%d", iteration, len(messages))
 
+            if _DUMP:
+                logger.info("LLM REQ: %s",
+                    json.dumps({"messages": messages, "tools": tools}, ensure_ascii=False, default=str))
             response = self.deepseek.chat_with_tools(messages, tools=tools)
             if not response:
                 return "（LLM 响应失败）", all_files
@@ -40,7 +46,8 @@ class LLMHandler:
 
             if not tool_calls:
                 # 没有工具调用 → 最终回复
-                self.recorder.record_assistant(user_id, content, tool_calls=None)
+                if content.strip() != "__SKIP__":
+                    self.recorder.record_assistant(user_id, content, tool_calls=None)
                 return content, all_files
 
             # 有工具调用 → 记录 assistant 消息
@@ -52,6 +59,9 @@ class LLMHandler:
             if tool_calls:
                 assistant_msg["tool_calls"] = tool_calls
             messages.append(assistant_msg)
+
+            has_final = False
+            final_text = ""
 
             # 逐个执行工具
             for tc in tool_calls:
@@ -81,12 +91,56 @@ class LLMHandler:
                 # 记录工具结果到 DB
                 self.recorder.record_tool_result(user_id, tool_name, result)
 
-                # 将工具结果加入上下文
+                # 检查是否为 final 工具
+                tool_obj = tool_registry.get(tool_name)
+                if tool_obj and tool_obj.final:
+                    # final 工具：不送回 LLM，直接返回结果
+                    # 但需插入假的 tool + assistant 响应到 DB（保证上下文完整）
+                    fake_tool = {"role": "tool", "tool_call_id": str(tc.get("id", "")),
+                                 "content": json.dumps(result, ensure_ascii=False)}
+                    self.recorder.record(
+                        user_id, "tool", content=json.dumps(result, ensure_ascii=False),
+                        metadata={"tool_call_id": str(tc.get("id", "")), "_fake": True},
+                    )
+                    self.recorder.record_assistant(user_id, result_text)
+                    has_final = True
+                    final_text = result_text
+                    break  # 跳出工具循环（不继续执行后面的工具）
+
+                # 非 final 工具：将结果加入上下文，继续 LLM 循环
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": tc.get("id", ""),
+                    "tool_call_id": str(tc.get("id", "")),
                     "content": json.dumps(result, ensure_ascii=False),
                 })
 
+            if has_final:
+                # 清理上下文中孤立的 tool_calls（final 工具不会添加 tool response）
+                # 避免下次构建上下文时 DeepSeek 报错
+                self._cleanup_orphan_tool_calls(messages)
+                return final_text, all_files
+
         logger.warning("LLM 工具调用达到最大迭代次数 %d", self.MAX_ITERATIONS)
         return "（工具调用次数过多，请简化问题）", all_files
+
+    @staticmethod
+    def _cleanup_orphan_tool_calls(messages: list[dict]):
+        """清理没有对应 tool response 的 tool_calls 消息"""
+        i = 0
+        while i < len(messages):
+            msg = messages[i]
+            if isinstance(msg, dict) and msg.get("tool_calls"):
+                tc_ids = {tc["id"] for tc in msg["tool_calls"]}
+                j = i + 1
+                while j < len(messages):
+                    nxt = messages[j]
+                    if isinstance(nxt, dict) and nxt.get("role") == "tool":
+                        tc_ids.discard(nxt.get("tool_call_id", ""))
+                        j += 1
+                    else:
+                        break
+                if tc_ids:
+                    logger.debug("清理孤立 tool_calls: %s", tc_ids)
+                    messages.pop(i)
+                    continue
+            i += 1

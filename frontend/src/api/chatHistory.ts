@@ -19,7 +19,7 @@ export async function getChatHistory(
   params?: { limit?: number; before_id?: number; since_id?: number }
 ): Promise<{ total: number; messages: ChatMessage[] }> {
   const { data } = await client.get(`/admin/chat-messages/${userId}`, { params });
-  return data;  // db_services 返回 flat JSON
+  return data;
 }
 
 export async function searchChatHistory(
@@ -31,5 +31,21 @@ export async function searchChatHistory(
   const { data } = await client.get('/admin/chat-messages/search', {
     params: { keyword, user_id: userId, hours_back: hoursBack, limit },
   });
-  return data;  // db_services 返回 flat JSON
+  return data;
+}
+
+export async function sendAgentRequest(
+  userId: string,
+  text: string,
+): Promise<{ text: string }> {
+  const { data } = await client.post('/admin/agent-request', {
+    protocol: 'web',
+    request_id: `web_${Date.now().toString(36)}`,
+    chat_type: 'private',
+    user_id: userId,
+    content_type: 'text',
+    content: text,
+    metadata: {},
+  });
+  return { text: data.data?.text || '' };
 }

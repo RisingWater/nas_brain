@@ -170,6 +170,35 @@ def get_max_message_id(user_id: str):
     return {"user_id": user_id, "max_id": row["max_id"] or 0}
 
 
+@router.delete("/single/{msg_id}")
+def delete_message_by_id(msg_id: int):
+    """按 ID 删除单条消息"""
+    conn = db.get_connection()
+    conn.execute("DELETE FROM chat_messages WHERE id = ?", (msg_id,))
+    conn.commit()
+    return {"success": True, "deleted_id": msg_id}
+
+
+@router.delete("/{user_id}/last")
+def delete_last_messages(user_id: str, count: int = Query(1, ge=1, le=20)):
+    """删除用户最新的 N 条消息"""
+    conn = db.get_connection()
+    rows = conn.execute(
+        "SELECT id FROM chat_messages WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+        (user_id, count),
+    ).fetchall()
+    ids = [r["id"] for r in rows]
+    if ids:
+        placeholders = ",".join("?" * len(ids))
+        conn.execute(
+            f"DELETE FROM chat_messages WHERE user_id = ? AND id IN ({placeholders})",
+            (user_id, *ids),
+        )
+        conn.commit()
+        return {"success": True, "user_id": user_id, "deleted_ids": ids}
+    return {"success": True, "user_id": user_id, "deleted_ids": []}
+
+
 @router.delete("/{user_id}")
 def delete_chat_messages(user_id: str, before_id: Optional[int] = Query(None)):
     """清理旧聊天记录"""
