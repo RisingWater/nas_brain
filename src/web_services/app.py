@@ -331,6 +331,12 @@ async def proxy_chat_summaries_list(user_id: str, request: Request):
     return await _proxy_to_db(f"/api/chat-summaries/{user_id}/list", request)
 
 
+# ---- 代理 /api/admin/strategy → brain_services:9031 ----
+@app.api_route("/api/admin/strategy/summarize/{user_id}", methods=["POST"])
+async def proxy_strategy_summarize(user_id: str, request: Request):
+    return await _proxy_to_brain(f"/api/strategy/summarize/{user_id}", request)
+
+
 # ---- 代理 /api/admin/agent-request → brain_services:9031 ----
 @app.api_route("/api/admin/agent-request", methods=["POST"])
 async def proxy_agent_request(request: Request):

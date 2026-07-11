@@ -87,8 +87,17 @@ class SummaryScheduler:
             except Exception as e:
                 logger.error("用户 %s 总结失败: %s", user_id, e)
 
-    def _summarize_user(self, user_id: str, window_minutes: int):
-        """对单个用户执行中期总结"""
+    def _summarize_user(self, user_id: str, window_minutes: int, force: bool = False):
+        """对单个用户执行增量中期总结
+
+        思路：旧总结 + 新增消息 → 新总结，避免每次全量消耗 token。
+        Args:
+            force: True=跳过 last_msg_id 和窗口检查
+        """
+        self._do_incremental_summary(user_id, window_minutes, force)
+
+    def _do_incremental_summary(self, user_id: str, window_minutes: int, force: bool = False):
+        """增量总结：取旧总结 → 加载新增消息 → 合并 → 存新总结"""
         # 1. 查已总结到的最大 msg_id
         try:
             url = cfg.get_service_url("db_services", f"/api/chat-summaries/{user_id}/max-msg-id")
@@ -97,7 +106,17 @@ class SummaryScheduler:
         except Exception:
             summarized_max = 0
 
-        # 2. 查当前最大 msg_id
+        # 2. 获取旧总结内容（如有）
+        old_summary = ""
+        try:
+            url = cfg.get_service_url("db_services", f"/api/chat-summaries/{user_id}/latest")
+            resp = requests.get(url, timeout=10)
+            if resp.status_code == 200:
+                old_summary = resp.json().get("summary", "")
+        except Exception:
+            pass
+
+        # 3. 查当前最大 msg_id
         try:
             url = cfg.get_service_url("db_services", f"/api/chat-messages/{user_id}/max-id")
             resp = requests.get(url, timeout=10)
@@ -105,20 +124,17 @@ class SummaryScheduler:
         except Exception:
             return
 
-        # 3. 没有新消息 → 跳过
-        if current_max <= summarized_max:
+        # 4. 没有新消息 → 跳过（除非 force）
+        if not force and current_max <= summarized_max:
             logger.debug("用户 %s 无新消息，跳过总结", user_id)
             return
 
-        # 4. 获取新消息（已过短期窗口期的，即窗口之前的历史）
-        # 读取 summarized_max 之后、窗口时间之前的所有消息
-        import datetime
-        cutoff = (datetime.datetime.utcnow() - datetime.timedelta(minutes=window_minutes))
+        # 5. 加载 summarized_max 之后的新消息
         try:
             url = cfg.get_service_url("db_services", f"/api/chat-messages/{user_id}")
             resp = requests.get(url, params={
                 "since_id": summarized_max,
-                "limit": 500,  # 最多拉 500 条用于总结
+                "limit": 500,
             }, timeout=15)
             if resp.status_code != 200:
                 return
@@ -128,15 +144,23 @@ class SummaryScheduler:
             logger.error("获取用户 %s 聊天记录失败: %s", user_id, e)
             return
 
-        # 只总结窗口之前的消息（短期记忆之外的历史）
-        old_messages = [m for m in messages if m.get("created_at", "") < cutoff.strftime("%Y-%m-%d %H:%M:%S")]
-        if not old_messages:
+        # 窗口过滤（非 force 模式只总结窗口之前的消息）
+        if not force and window_minutes > 0:
+            import datetime
+            cutoff = (datetime.datetime.utcnow() - datetime.timedelta(minutes=window_minutes))
+            messages = [m for m in messages
+                        if m.get("created_at", "") < cutoff.strftime("%Y-%m-%d %H:%M:%S")]
+
+        if not messages:
             logger.debug("用户 %s 窗口内无过期消息，跳过总结", user_id)
             return
 
-        # 5. 调 DeepSeek 压缩
+        # 6. 组装 prompt：旧总结 + 新消息
         log_lines = []
-        for m in old_messages:
+        if old_summary:
+            log_lines.append(f"【之前的总结】\n{old_summary}\n")
+        log_lines.append("【新增聊天记录】")
+        for m in messages:
             role = m.get("role", "?")
             content = (m.get("content") or "")[:200]
             tool = m.get("tool_name", "")
@@ -149,16 +173,18 @@ class SummaryScheduler:
         if not log_text.strip():
             return
 
-        prompt = f"请总结以下聊天记录：\n\n{log_text}"
+        prompt = (
+            "你是一个对话摘要助手。请将之前的总结和新增的聊天记录合并为一份新的简洁总结，"
+            "保留重要的事件、决定、用户偏好和关键信息。用中文，控制在 500 字以内。\n\n"
+            f"{log_text}"
+        )
         summary = self.deepseek.ask_single_question(prompt, timeout=30)
         if not summary:
             logger.warning("用户 %s 总结生成失败", user_id)
             return
-
-        # 限制总结长度
         summary = summary[:2000]
 
-        # 6. 存入 chat_summaries
+        # 7. 存入 chat_summaries
         try:
             url = cfg.get_service_url("db_services", "/api/chat-summaries")
             resp = requests.post(url, json={
@@ -167,8 +193,8 @@ class SummaryScheduler:
                 "last_msg_id": current_max,
             }, timeout=10)
             if resp.status_code == 201:
-                logger.info("用户 %s 中期总结完成: %d 条消息 → %d 字",
-                            user_id, len(old_messages), len(summary))
+                logger.info("用户 %s 增量总结完成: %d 条新消息 → %d 字",
+                            user_id, len(messages), len(summary))
         except Exception as e:
             logger.error("保存总结失败: %s", e)
 

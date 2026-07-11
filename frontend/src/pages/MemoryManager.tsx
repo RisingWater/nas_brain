@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import {
   Card, Tabs, Input, Button, Select, Typography, message, Spin, Space, Tag, Empty, Modal,
 } from 'antd';
-import { EditOutlined, SaveOutlined, ReloadOutlined } from '@ant-design/icons';
-import { getLongTermMemory, saveLongTermMemory, getSummaries } from '../api/memory';
+import { EditOutlined, SaveOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { getLongTermMemory, saveLongTermMemory, getSummaries, triggerSummarize } from '../api/memory';
 import type { ChatSummary } from '../api/memory';
 import { listUsers } from '../api/strategy';
 
@@ -54,6 +54,22 @@ export default function MemoryManager() {
       message.error('保存失败');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const [summarizing, setSummarizing] = useState(false);
+
+  const handleSummarize = async () => {
+    if (!selectedUser) return;
+    setSummarizing(true);
+    try {
+      await triggerSummarize(selectedUser);
+      message.success('总结完成');
+      handleUserChange(selectedUser);
+    } catch {
+      message.error('总结失败');
+    } finally {
+      setSummarizing(false);
     }
   };
 
@@ -149,9 +165,14 @@ export default function MemoryManager() {
                     }))}
                   />
                   {selectedUser && (
-                    <Button icon={<ReloadOutlined />} onClick={() => handleUserChange(selectedUser)}>
-                      刷新
-                    </Button>
+                    <Space>
+                      <Button icon={<ReloadOutlined />} onClick={() => handleUserChange(selectedUser)}>
+                        刷新
+                      </Button>
+                      <Button icon={<ThunderboltOutlined />} onClick={handleSummarize} loading={summarizing}>
+                        立即总结
+                      </Button>
+                    </Space>
                   )}
                 </Space>
 

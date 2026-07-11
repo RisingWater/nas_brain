@@ -17,6 +17,10 @@ export interface ChatSummary {
   created_at: string;
 }
 
+export async function triggerSummarize(userId: string): Promise<void> {
+  await client.post(`/admin/strategy/summarize/${userId}`);
+}
+
 export async function getSummaries(userId: string): Promise<ChatSummary[]> {
   const { data } = await client.get(`/admin/chat-summaries/${userId}/list`);
   return data.items;  // db_services 返回 flat JSON
