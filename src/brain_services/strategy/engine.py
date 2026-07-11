@@ -1,0 +1,155 @@
+"""策略引擎 — 消息分流 + smart/direct 处理"""
+import os
+import logging
+import requests
+from src.common.utils import cfg
+from src.common.schemas.agent_request import AgentRequest, ProtocolType
+from ..schema.brain_schema import AgentResponse
+from ..processors import registry as proc_registry
+from ..tools import registry as tool_registry
+from .chat_recorder import ChatRecorder
+from .context_builder import LLMContextBuilder
+from .llm_handler import LLMHandler
+from .tool_filter import ToolFilter
+
+logger = logging.getLogger("brain_services.strategy.engine")
+
+_WECHAT_BOT_NAME = os.getenv("WECHAT_BOT_NAME", "")
+
+
+class StrategyEngine:
+    """策略引擎 — 判断策略 + 分流处理"""
+
+    def __init__(self):
+        self.recorder = ChatRecorder()
+        self.context_builder = LLMContextBuilder()
+        self.llm_handler = LLMHandler()
+        self.tool_filter = ToolFilter()
+
+    def get_user_config(self, user_id: str) -> dict:
+        """获取用户配置（不存在则返回默认值）"""
+        try:
+            url = cfg.get_service_url("db_services", f"/api/user-configs/{user_id}")
+            resp = requests.get(url, timeout=10)
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception as e:
+            logger.error("获取用户配置失败: %s", e)
+        return {
+            "strategy": "smart",
+            "system_prompt": "",
+            "allowed_tools": None,
+            "short_term_window": 30,
+            "group_at_only": True,
+        }
+
+    def is_mentioned(self, req: AgentRequest) -> bool:
+        """检测群聊中是否 @ 了 Bot"""
+        if not _WECHAT_BOT_NAME:
+            return True  # 没配就不过滤
+        content = req.content or ""
+        return f"@{_WECHAT_BOT_NAME}" in content
+
+    def should_skip(self, req: AgentRequest, config: dict) -> bool:
+        """是否应该跳过处理（群聊 + group_at_only + 没 @）"""
+        if req.chat_type.value != "group":
+            return False
+        if not config.get("group_at_only", True):
+            return False
+        if self.is_mentioned(req):
+            return False
+        logger.info("群消息无 @，跳过处理: %.50s", req.content or "")
+        return True
+
+    def get_strategy(self, req: AgentRequest, config: dict) -> str:
+        """判断策略：voice 强制 smart，其他按配置"""
+        if req.protocol == ProtocolType.VOICE:
+            return "smart"
+        return config.get("strategy", "smart")
+
+    def process(self, req: AgentRequest) -> AgentResponse:
+        """主入口：判断策略 → 处理 → 返回"""
+        # 0. 获取配置
+        config = self.get_user_config(req.user_id)
+
+        # 1. 检查是否跳过
+        if self.should_skip(req, config):
+            return AgentResponse(data={
+                "request_id": req.request_id,
+                "text": "",
+                "skipped": True,
+            })
+
+        # 2. 记录用户消息到 DB
+        self.recorder.record_user_message(req)
+
+        # 3. Ignore 策略：只记录不处理
+        strategy = self.get_strategy(req, config)
+        if strategy == "ignore":
+            logger.info("Ignore 策略，跳过处理: %.50s", req.content or "")
+            return AgentResponse(data={
+                "request_id": req.request_id,
+                "text": "",
+                "ignored": True,
+            })
+
+        # 4. 先尝试 processors
+        processor, ctx = proc_registry.find_handler(req)
+        if processor:
+            logger.info("Processor %s 处理请求", processor.name)
+            try:
+                result = processor.handle(req, ctx)
+                if result and "reply" in result:
+                    self.recorder.record_processor(req, processor.name, result["reply"])
+                    return AgentResponse(data={
+                        "request_id": req.request_id,
+                        "text": result["reply"],
+                        "processor": processor.name,
+                    })
+            except Exception as e:
+                logger.error("Processor %s 异常: %s", processor.name, e, exc_info=True)
+
+        # 5. 按策略分流
+        if strategy == "smart":
+            return self._process_smart(req, config)
+        else:
+            return self._process_direct(req)
+
+    def _process_smart(self, req: AgentRequest, config: dict) -> AgentResponse:
+        """Smart 模式：LLM + 工具调用"""
+        # 构建上下文
+        messages = self.context_builder.build(
+            user_id=req.user_id,
+            config=config,
+            current_msg=req.content or "",
+            protocol=req.protocol.value if hasattr(req.protocol, 'value') else str(req.protocol),
+            chat_type=req.chat_type.value if hasattr(req.chat_type, 'value') else str(req.chat_type),
+        )
+
+        # 过滤工具
+        all_tools = tool_registry.get_schemas()
+        filtered_tools = self.tool_filter.filter(
+            all_tools, config.get("allowed_tools"),
+        )
+
+        # 执行 LLM 循环
+        reply, files = self.llm_handler.handle(
+            user_id=req.user_id,
+            messages=messages,
+            tools=filtered_tools,
+        )
+
+        # 处理附件
+        return AgentResponse(data={
+            "request_id": req.request_id,
+            "text": reply or "（无回复）",
+            "files": files,
+        })
+
+    def _process_direct(self, req: AgentRequest) -> AgentResponse:
+        """Direct 模式：processor 未命中时的简单回复"""
+        return AgentResponse(data={
+            "request_id": req.request_id,
+            "text": f"已收到你的消息：{req.content or ''}",
+            "received": True,
+        })

@@ -1,5 +1,6 @@
-"""文档打印处理器 — 接收图片/文档文件，通过 CUPS 网络打印机输出"""
+"""文档打印处理器 — 接收图片/文档文件，通过 CUPS 网络打印机输出（仅 Linux）"""
 import os
+import sys
 import shutil
 import tempfile
 import logging
@@ -17,7 +18,7 @@ SUPPORTED_EXT = {'.doc', '.docx', '.pdf', '.wps'}
 
 class PrintProcessor(BaseProcessor):
     name = "print"
-    description = "文档打印处理器"
+    description = "文档打印处理器（仅 Linux）"
 
     def priority(self) -> int:
         return 10
@@ -97,4 +98,8 @@ class PrintProcessor(BaseProcessor):
             shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-registry.register(PrintProcessor())
+# 仅 Linux 注册（Windows 下无 CUPS 驱动）
+if sys.platform != "win32":
+    registry.register(PrintProcessor())
+else:
+    logger.info("Windows 平台，跳过注册 print processor")

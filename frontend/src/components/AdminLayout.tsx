@@ -11,6 +11,8 @@ import {
   ClockCircleOutlined,
   ThunderboltOutlined,
   ExperimentOutlined,
+  MessageOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -20,6 +22,8 @@ const menuItems = [
   { key: '/users', icon: <UserOutlined />, label: '用户管理' },
   { key: '/services', icon: <CloudServerOutlined />, label: '服务管理' },
   { key: '/logs', icon: <FileTextOutlined />, label: '日志查看' },
+  { key: '/chat-history', icon: <MessageOutlined />, label: '聊天记录' },
+  { key: '/memory', icon: <DatabaseOutlined />, label: '记忆管理' },
   { key: '/tools', icon: <ToolOutlined />, label: '工具管理' },
   { key: '/tts-cache', icon: <SoundOutlined />, label: 'TTS 缓存' },
   { key: '/schedules', icon: <ClockCircleOutlined />, label: '定时提醒' },

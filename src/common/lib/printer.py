@@ -1,7 +1,6 @@
 """CUPS 网络打印机客户端 — 跨平台，通过 IPP 打印 PDF"""
 import os
 import logging
-import cups
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +18,12 @@ class Printer:
 
     def _connect(self):
         try:
+            import cups
             self._conn = cups.Connection()
             logger.info("已连接 CUPS 服务器")
+        except ImportError:
+            logger.warning("pycups 未安装，打印功能不可用 (pip install pycups)")
+            self._conn = None
         except Exception as e:
             logger.error("连接 CUPS 失败: %s", e)
             self._conn = None

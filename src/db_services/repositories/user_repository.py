@@ -47,6 +47,8 @@ class UserRepository:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_user_id ON users(user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_name ON users(wechat_name)")
+        # 兼容：旧表的 is_active 可能为 NULL，设为 1
+        conn.execute("UPDATE users SET is_active = 1 WHERE is_active IS NULL")
         conn.commit()
     
     def add_user(self, display_name: str, user_type: str = "person",
@@ -85,7 +87,7 @@ class UserRepository:
     def get_user_by_wechat(self, wechat_name: str) -> Optional[Dict]:
         conn = self._get_conn()
         cursor = conn.execute(
-            """SELECT user_id, display_name, user_type, is_temp 
+            """SELECT user_id, display_name, user_type, wechat_name, is_temp, created_at, is_active
                FROM users WHERE wechat_name = ? AND is_active = 1""",
             (wechat_name,)
         )
@@ -96,7 +98,10 @@ class UserRepository:
             "user_id": row[0],
             "display_name": row[1],
             "user_type": row[2],
-            "is_temp": bool(row[3]),
+            "wechat_name": row[3],
+            "is_temp": bool(row[4]),
+            "created_at": row[5],
+            "is_active": bool(row[6]),
         }
     
     def list_users(self, user_type: str = None, keyword: str = None,

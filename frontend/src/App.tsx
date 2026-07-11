@@ -8,6 +8,8 @@ import TTSCacheManager from './pages/TTSCacheManager';
 import ScheduleManager from './pages/ScheduleManager';
 import DetectorManager from './pages/DetectorManager';
 import ProcessorManager from './pages/ProcessorManager';
+import ChatHistory from './pages/ChatHistory';
+import MemoryManager from './pages/MemoryManager';
 
 export default function App() {
   return (
@@ -22,6 +24,8 @@ export default function App() {
           <Route path="/schedules" element={<ScheduleManager />} />
           <Route path="/detectors" element={<DetectorManager />} />
           <Route path="/processors" element={<ProcessorManager />} />
+          <Route path="/chat-history" element={<ChatHistory />} />
+          <Route path="/memory" element={<MemoryManager />} />
           <Route path="/" element={<Navigate to="/users" replace />} />
         </Route>
       </Routes>

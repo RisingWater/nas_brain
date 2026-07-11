@@ -162,7 +162,7 @@ class ReminderDetector(BaseDetector):
                 content_type=ContentType.TEXT,
                 content=prompt,
             )
-            resp = requests.post(url, json=req.model_dump(), timeout=15)
+            resp = requests.post(url, json=req.model_dump(mode="json"), timeout=15)
             if resp.status_code != 200:
                 logger.warning("brain_services 返回 %s", resp.status_code)
         except Exception as e:

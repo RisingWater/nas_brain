@@ -1,8 +1,9 @@
-# db_services/routes/users.py
+"""db_services — 用户 CRUD"""
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from ..schema.user_schema import AddUserRequest, UpdateUserRequest, UserResponse, ListUsersResponse
 from ..repositories.user_repository import user_repo
+from ..db_connection import db
 
 router = APIRouter()
 
@@ -16,9 +17,26 @@ async def add_user(req: AddUserRequest):
             wechat_name=req.wechat_name,
             is_temp=req.is_temp
         )
+        # 自动创建默认策略配置（ignore）
+        conn = db.get_connection()
+        conn.execute(
+            """INSERT OR IGNORE INTO user_configs (user_id, strategy)
+               VALUES (?, 'ignore')""",
+            (user_id,),
+        )
+        conn.commit()
         return {"success": True, "user_id": user_id}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/by-wechat", response_model=UserResponse)
+async def get_user_by_wechat(wechat_name: str = Query(..., min_length=1)):
+    """按微信名查找用户（必须放在 /{user_id} 前面）"""
+    user = user_repo.get_user_by_wechat(wechat_name)
+    if not user:
+        raise HTTPException(404, f"微信名 '{wechat_name}' 未找到")
+    return UserResponse(**user)
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -26,14 +44,6 @@ async def get_user(user_id: str):
     user = user_repo.get_user(user_id)
     if not user:
         raise HTTPException(404, f"用户 {user_id} 不存在")
-    return UserResponse(**user)
-
-
-@router.get("/by-wechat", response_model=UserResponse)
-async def get_user_by_wechat(wechat_name: str = Query(..., min_length=1)):
-    user = user_repo.get_user_by_wechat(wechat_name)
-    if not user:
-        raise HTTPException(404, f"微信名 '{wechat_name}' 未找到")
     return UserResponse(**user)
 
 
@@ -77,6 +87,12 @@ async def delete_user(user_id: str):
     if not existing:
         raise HTTPException(404, f"用户 {user_id} 不存在")
     success = user_repo.delete_user(user_id)
+    # 同时删除关联数据
+    conn = db.get_connection()
+    conn.execute("DELETE FROM user_configs WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM chat_messages WHERE user_id = ?", (user_id,))
+    conn.execute("DELETE FROM chat_summaries WHERE user_id = ?", (user_id,))
+    conn.commit()
     return {
         "success": success,
         "user_id": user_id,

@@ -237,6 +237,90 @@ async def proxy_processors_load(request: Request):
     return await _proxy_to_brain("/api/processors/load", request)
 
 
+# ---- 代理 /api/admin/user-configs → db_services:9021 ----
+async def _proxy_to_db(path: str, request: Request) -> JSONResponse:
+    qs = request.url.query
+    url = f"http://127.0.0.1:9021{path}"
+    if qs:
+        url += f"?{qs}"
+    body = await request.body()
+    headers = {k: v for k, v in request.headers.items()
+               if k.lower() not in ("host", "content-length")}
+    try:
+        resp = await asyncio.to_thread(
+            _req.request, request.method, url, data=body, headers=headers, timeout=15,
+        )
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+    except Exception as e:
+        return JSONResponse(
+            content={"code": 502, "message": f"db_services 不可用: {e}", "data": None},
+            status_code=502,
+        )
+
+
+@app.api_route("/api/admin/user-configs", methods=["GET"])
+async def proxy_user_configs_list(request: Request):
+    return await _proxy_to_db("/api/user-configs", request)
+
+
+@app.api_route("/api/admin/user-configs/{user_id}", methods=["GET", "PUT", "DELETE"])
+async def proxy_user_configs_detail(user_id: str, request: Request):
+    return await _proxy_to_db(f"/api/user-configs/{user_id}", request)
+
+
+@app.api_route("/api/admin/chat-messages/{user_id}", methods=["GET", "DELETE"])
+async def proxy_chat_messages(user_id: str, request: Request):
+    return await _proxy_to_db(f"/api/chat-messages/{user_id}", request)
+
+
+@app.api_route("/api/admin/chat-messages/search", methods=["GET"])
+async def proxy_chat_messages_search(request: Request):
+    return await _proxy_to_db("/api/chat-messages/search", request)
+
+
+@app.api_route("/api/admin/chat-summaries/{user_id}/latest", methods=["GET"])
+async def proxy_chat_summaries_latest(user_id: str, request: Request):
+    return await _proxy_to_db(f"/api/chat-summaries/{user_id}/latest", request)
+
+
+# ---- 长期记忆 API (直接读写 memory.md) ----
+_MEMORY_FILE = os.getenv("MEMORY_FILE", os.path.join(os.path.dirname(__file__), "..", "..", "data", "memory.md"))
+
+
+@app.get("/api/admin/memory")
+async def get_long_term_memory():
+    """获取长期记忆内容"""
+    try:
+        if os.path.exists(_MEMORY_FILE):
+            with open(_MEMORY_FILE, encoding="utf-8") as f:
+                content = f.read()
+        else:
+            content = ""
+        return {"code": 200, "data": {"content": content}, "message": "ok"}
+    except Exception as e:
+        return {"code": 500, "data": None, "message": str(e)}
+
+
+@app.put("/api/admin/memory")
+async def update_long_term_memory(request: Request):
+    """更新长期记忆内容（全量覆盖）"""
+    try:
+        body = await request.json()
+        content = body.get("content", "")
+        os.makedirs(os.path.dirname(_MEMORY_FILE) or ".", exist_ok=True)
+        with open(_MEMORY_FILE, "w", encoding="utf-8") as f:
+            f.write(content)
+        return {"code": 200, "data": {"saved": True}, "message": "ok"}
+    except Exception as e:
+        return {"code": 500, "data": None, "message": str(e)}
+
+
+@app.get("/api/admin/chat-summaries/{user_id}/list")
+async def proxy_chat_summaries_list(user_id: str, request: Request):
+    """获取用户的所有中期记忆"""
+    return await _proxy_to_db(f"/api/chat-summaries/{user_id}/list", request)
+
+
 # 静态文件 — 前端构建产物
 _frontend_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
 _frontend_dist = os.path.normpath(_frontend_dist)

@@ -43,13 +43,21 @@
 - [x] `src/common/clients/` — deepseek / baidu_ocr
 - [x] agent.py 集成 processor 优先处理
 
-## 阶段 4：Brain Services 策略引擎 ⏳
+## 阶段 4：Brain Services 策略引擎 ✅
 
-- [ ] `src/brain_services/strategy/`
-  - [ ] 用户策略配置（smart/direct）
-  - [ ] StrategyEngine — 来源判断 + 策略路由
-  - [ ] 管理 API + 前端配置页面
-  - [ ] 更新 `routes/agent.py` 调用 StrategyEngine
+- [x] `db_services` 新表: user_configs / chat_messages / chat_summaries
+- [x] `common/clients/deepseek.py` 升级：新增 chat_with_tools function calling
+- [x] `src/brain_services/strategy/` — 策略引擎完整模块
+  - [x] engine.py — 策略判断 + smart/direct 分流
+  - [x] context_builder.py — 三层记忆构建（短期/中期/长期）
+  - [x] llm_handler.py — 函数调用循环
+  - [x] chat_recorder.py — 交互记录写入 DB
+  - [x] tool_filter.py — 工具白名单过滤
+  - [x] summarizer.py — 中期记忆后台总结器
+- [x] `search_chat_history` 工具 — LLM 可搜索历史聊天
+- [x] agent.py 集成策略引擎
+- [x] 群聊 @Bot 检测 + group_at_only 配置
+- [x] web_services 代理 + 前端配置页
 
 ## 阶段 5：更新 CLAUDE.md ⏳
 

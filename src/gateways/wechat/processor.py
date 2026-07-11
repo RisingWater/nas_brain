@@ -142,7 +142,7 @@ class WeChatProcessor:
         try:
             resp = requests.post(
                 _BRAIN_URL,
-                json=agent_req.model_dump(),
+                json=agent_req.model_dump(mode="json"),
                 timeout=10,
             )
             if resp.status_code == 200:
@@ -173,7 +173,11 @@ class WeChatProcessor:
                     logger.info("收到 %d 条消息", len(messages))
 
                     for msg in messages:
+                        if os.getenv("WECHAT_GATEWAY_DUMP_MSG"):
+                            logger.info("RAW: %s", json.dumps(msg, ensure_ascii=False, default=str))
                         if msg.get("attr") == "self":
+                            continue
+                        if msg.get("class") == "SystemMessage" or msg.get("attr") == "system":
                             continue
                         self._process_one(msg)
 
