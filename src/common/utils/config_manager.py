@@ -21,6 +21,7 @@ _SERVICE_PORTS: dict[str, tuple[str, str]] = {
     "playback_services": ("PLAYBACK_SERVICE_PORT", "9041"),
     "schedule_services": ("SCHEDULE_SERVICE_PORT", "9040"),
     "timer_services":   ("TIMER_SERVICE_PORT",   "9040"),
+    "voice_gateway":    ("VOICE_GATEWAY_PORT",   "9050"),
 }
 
 
@@ -55,7 +56,7 @@ class ConfigManager:
             self._load_registry()
 
         # LOG
-        self.LOG_DIR = os.getenv("LOG_DIR", "logs")
+        self.LOG_DIR = os.getenv("LOG_DIR", "data/logs")
         self.LOG_SIZE = int(os.getenv("LOG_SIZE", "20")) * 1024 * 1024
         self.LOG_BACKUPS = int(os.getenv("LOG_BACKUP", "3"))
         self.LOG_MAX_ENTRYS = int(os.getenv("LOG_MAX_ENTRY", "20000"))

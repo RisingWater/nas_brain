@@ -6,17 +6,27 @@ pydantic
 python-multipart
 python-dotenv
 
-# === 图像处理 ===
+# === 图像/文档处理 ===
 opencv-python
 numpy
 img2pdf
+beautifulsoup4
+python-docx
 
 # === 音频 ===
 pyaudio
+silero-vad
+webrtcvad
 
-# === 网页/文档 ===
-beautifulsoup4
-python-docx
+# === 语音识别/声纹 ===
+funasr
+modelscope
+
+# === 唤醒词 ===
+livekit-wakeword
+
+# === 音频处理 ===
+pydub
 
 # === 可选（按需安装） ===
 # fpdf2          # write_pdf_file 工具需要

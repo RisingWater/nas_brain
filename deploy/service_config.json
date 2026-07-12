@@ -28,5 +28,10 @@
     "name": "schedule_services",
     "description": "定时任务微服务",
     "command": "python -m uvicorn src.schedule_services.app:app --host 0.0.0.0 --port 9040"
+  },
+  {
+    "name": "voice_gateway",
+    "description": "语音网关（唤醒词 + 语音播放互斥）",
+    "command": "python -m uvicorn src.gateways.voice.app:app --host 0.0.0.0 --port 9050"
   }
 ]

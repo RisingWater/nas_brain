@@ -337,6 +337,58 @@ async def proxy_strategy_summarize(user_id: str, request: Request):
     return await _proxy_to_brain(f"/api/strategy/summarize/{user_id}", request)
 
 
+# ---- 代理 /api/admin/wakeword → db_services:9021 ----
+@app.api_route("/api/admin/wakeword/threshold", methods=["GET", "PUT"])
+async def proxy_wakeword_threshold(request: Request):
+    return await _proxy_to_db("/api/wakeword/threshold", request)
+
+@app.api_route("/api/admin/wakeword/records", methods=["GET", "POST"])
+async def proxy_wakeword_records(request: Request):
+    return await _proxy_to_db("/api/wakeword/records", request)
+
+@app.api_route("/api/admin/wakeword/records/{record_id}/category", methods=["PUT"])
+async def proxy_wakeword_category(record_id: int, request: Request):
+    return await _proxy_to_db(f"/api/wakeword/records/{record_id}/category", request)
+
+@app.api_route("/api/admin/wakeword/records/{record_id}/audio", methods=["GET"])
+async def proxy_wakeword_audio(record_id: int, request: Request):
+    return await _proxy_to_db(f"/api/wakeword/records/{record_id}/audio", request)
+
+@app.api_route("/api/admin/wakeword/records/old", methods=["DELETE"])
+async def proxy_wakeword_old(request: Request):
+    return await _proxy_to_db("/api/wakeword/records/old", request)
+
+
+# ---- 代理 /api/admin/voiceprints → db_services:9021 ----
+@app.api_route("/api/admin/voiceprints", methods=["GET"])
+async def proxy_voiceprints_list(request: Request):
+    return await _proxy_to_db("/api/voiceprints", request)
+
+@app.api_route("/api/admin/voiceprints/threshold", methods=["GET", "PUT"])
+async def proxy_voiceprints_threshold(request: Request):
+    return await _proxy_to_db("/api/voiceprints/threshold", request)
+
+@app.api_route("/api/admin/voiceprints/enroll", methods=["POST"])
+async def proxy_voiceprints_enroll(request: Request):
+    return await _proxy_to_db("/api/voiceprints/enroll", request)
+
+@app.api_route("/api/admin/voiceprints/detect", methods=["POST"])
+async def proxy_voiceprints_detect(request: Request):
+    return await _proxy_to_db("/api/voiceprints/detect", request)
+
+@app.api_route("/api/admin/voiceprints/{vp_id}", methods=["GET", "DELETE"])
+async def proxy_voiceprints_detail(vp_id: int, request: Request):
+    return await _proxy_to_db(f"/api/voiceprints/{vp_id}", request)
+
+@app.api_route("/api/admin/voiceprints/{vp_id}/move", methods=["PUT"])
+async def proxy_voiceprints_move(vp_id: int, request: Request):
+    return await _proxy_to_db(f"/api/voiceprints/{vp_id}/move", request)
+
+@app.api_route("/api/admin/voiceprints/{vp_id}/audio", methods=["GET"])
+async def proxy_voiceprints_audio(vp_id: int, request: Request):
+    return await _proxy_to_db(f"/api/voiceprints/{vp_id}/audio", request)
+
+
 # ---- 代理 /api/admin/agent-request → brain_services:9031 ----
 @app.api_route("/api/admin/agent-request", methods=["POST"])
 async def proxy_agent_request(request: Request):

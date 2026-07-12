@@ -13,6 +13,8 @@ import {
   ExperimentOutlined,
   MessageOutlined,
   DatabaseOutlined,
+  CustomerServiceOutlined,
+  UserSwitchOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -24,6 +26,8 @@ const menuItems = [
   { key: '/logs', icon: <FileTextOutlined />, label: '日志查看' },
   { key: '/chat-history', icon: <MessageOutlined />, label: '聊天记录' },
   { key: '/memory', icon: <DatabaseOutlined />, label: '记忆管理' },
+  { key: '/wakeword', icon: <CustomerServiceOutlined />, label: '唤醒词' },
+  { key: '/voiceprints', icon: <UserSwitchOutlined />, label: '声纹' },
   { key: '/tools', icon: <ToolOutlined />, label: '工具管理' },
   { key: '/tts-cache', icon: <SoundOutlined />, label: 'TTS 缓存' },
   { key: '/schedules', icon: <ClockCircleOutlined />, label: '定时提醒' },

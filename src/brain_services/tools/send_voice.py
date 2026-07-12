@@ -1,4 +1,4 @@
-"""发送语音消息工具 — 让 LLM 通过语音播放内容"""
+"""发送语音消息工具 — 让 LLM 通过 voice_gateway 播放（带互斥锁）"""
 import logging
 import requests
 from src.common.utils import cfg
@@ -33,8 +33,8 @@ class SendVoiceTool(BaseTool):
             return {"text": "播放失败：缺少文字内容", "files": []}
 
         try:
-            url = cfg.get_service_url("playback_services", "/api/speak/play")
-            resp = requests.post(url, json={"text": text}, timeout=30)
+            url = cfg.get_service_url("voice_gateway", "/api/voice/speak")
+            resp = requests.post(url, json={"text": text}, timeout=60)
             data = resp.json()
             if data.get("code") == 200:
                 logger.info("语音已播放: %.30s", text)
