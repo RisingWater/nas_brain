@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { Layout, Menu, Button, theme } from 'antd';
 import {
   MenuFoldOutlined,
@@ -15,33 +15,71 @@ import {
   DatabaseOutlined,
   CustomerServiceOutlined,
   UserSwitchOutlined,
+  SettingOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
 const { Header, Sider, Content } = Layout;
 
 const menuItems = [
-  { key: '/users', icon: <UserOutlined />, label: '用户管理' },
-  { key: '/services', icon: <CloudServerOutlined />, label: '服务管理' },
-  { key: '/logs', icon: <FileTextOutlined />, label: '日志查看' },
-  { key: '/chat-history', icon: <MessageOutlined />, label: '聊天记录' },
-  { key: '/memory', icon: <DatabaseOutlined />, label: '记忆管理' },
-  { key: '/wakeword', icon: <CustomerServiceOutlined />, label: '唤醒词' },
-  { key: '/voiceprints', icon: <UserSwitchOutlined />, label: '声纹' },
-  { key: '/tools', icon: <ToolOutlined />, label: '工具管理' },
-  { key: '/tts-cache', icon: <SoundOutlined />, label: 'TTS 缓存' },
-  { key: '/schedules', icon: <ClockCircleOutlined />, label: '定时提醒' },
-  { key: '/detectors', icon: <ThunderboltOutlined />, label: '定时任务' },
-  { key: '/processors', icon: <ExperimentOutlined />, label: '处理器' },
+  {
+    key: 'brain', icon: <RobotOutlined />, label: '智能引擎',
+    children: [
+      { key: '/users', label: '用户策略' },
+      { key: '/chat-history', icon: <MessageOutlined />, label: '聊天记录' },
+      { key: '/memory', icon: <DatabaseOutlined />, label: '记忆管理' },
+    ],
+  },
+  {
+    key: 'voice', icon: <SoundOutlined />, label: '语音网关',
+    children: [
+      { key: '/wakeword', icon: <CustomerServiceOutlined />, label: '唤醒词' },
+      { key: '/voiceprints', icon: <UserSwitchOutlined />, label: '声纹' },
+      { key: '/tts-cache', label: 'TTS 缓存' },
+    ],
+  },
+  {
+    key: 'schedule', icon: <ClockCircleOutlined />, label: '定时任务',
+    children: [
+      { key: '/schedules', label: '定时提醒' },
+      { key: '/detectors', icon: <ThunderboltOutlined />, label: '定时任务' },
+    ],
+  },
+  {
+    key: 'tools', icon: <ToolOutlined />, label: '工具插件',
+    children: [
+      { key: '/tools', label: '工具管理' },
+      { key: '/processors', icon: <ExperimentOutlined />, label: '处理器' },
+    ],
+  },
+  {
+    key: 'system', icon: <SettingOutlined />, label: '系统维护',
+    children: [
+      { key: '/services', icon: <CloudServerOutlined />, label: '服务管理' },
+      { key: '/logs', icon: <FileTextOutlined />, label: '日志查看' },
+    ],
+  },
 ];
 
 export default function AdminLayout() {
-  const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
+
+  // 根据当前路径找到对应的父菜单 key
+  const openKeys = useMemo(() => {
+    const path = location.pathname;
+    for (const item of menuItems) {
+      if (item.children?.some(c => c.key === path)) {
+        return [item.key];
+      }
+    }
+    return [];
+  }, [location.pathname]);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -73,6 +111,7 @@ export default function AdminLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
+          defaultOpenKeys={openKeys}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />
