@@ -101,11 +101,15 @@ class StrategyEngine:
                 result = processor.handle(req, ctx)
                 if result and "reply" in result:
                     self.recorder.record_processor(req, processor.name, result["reply"])
-                    return AgentResponse(data={
+                    resp_data = {
                         "request_id": req.request_id,
                         "text": result["reply"],
                         "processor": processor.name,
-                    })
+                    }
+                    # 透传文件路径（由 agent route 统一发送到微信）
+                    if "files" in result:
+                        resp_data["files"] = result["files"]
+                    return AgentResponse(data=resp_data)
             except Exception as e:
                 logger.error("Processor %s 异常: %s", processor.name, e, exc_info=True)
 

@@ -1,7 +1,5 @@
-"""公众号链接保存处理器 — 将链接内容转为 DOCX 文件并发送"""
+"""公众号链接保存处理器 — 将链接内容转为 DOCX 文件"""
 import os
-import shutil
-import tempfile
 import logging
 from . import BaseProcessor, registry
 from src.common.schemas.agent_request import AgentRequest, ContentType
@@ -27,25 +25,23 @@ class UrlSaveProcessor(BaseProcessor):
 
         ctx.reply("正在转换网页链接，请稍候...")
 
-        tmpdir = tempfile.mkdtemp()
+        temp_dir = os.getenv("TEMP_DIR", "data")
+        os.makedirs(temp_dir, exist_ok=True)
         try:
             converter = FixedWebConverter()
-            docx_path = converter.convert_url_to_docx(url, tmpdir)
+            docx_path = converter.convert_url_to_docx(url, temp_dir)
 
             if docx_path and os.path.exists(docx_path):
                 ctx.reply("网页链接已转换为 DOCX，正在发送文件...")
-                # 通过 wechat_gateway 发送文件
-                with open(docx_path, "rb") as f:
-                    file_data = f.read()
-                who = req.metadata.get("wechat_name", "") or req.user_id
-                ctx.send_wechat(who, None)  # placeholder
-                # TODO: 发送文件到微信
-                return {"reply": "链接已保存为 DOCX 文件"}
+                # 返回文件路径，由 agent route 统一发送到微信
+                return {"reply": "链接已保存为 DOCX 文件", "files": [docx_path]}
             ctx.reply("转换失败，请检查链接是否正确")
             return {"reply": "转换失败"}
 
-        finally:
-            shutil.rmtree(tmpdir, ignore_errors=True)
+        except Exception as e:
+            logger.error("转换失败: %s", e, exc_info=True)
+            ctx.reply(f"转换失败: {e}")
+            return {"reply": f"转换失败: {e}"}
 
 
 registry.register(UrlSaveProcessor())

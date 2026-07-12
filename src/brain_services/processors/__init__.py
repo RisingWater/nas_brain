@@ -1,6 +1,7 @@
 """Processor 处理器插件系统 — BaseProcessor + ProcessorContext + ProcessorRegistry
 
 与 tool/detector 同模式，支持热加载。"""
+import os
 import logging
 from typing import Optional
 from src.common.schemas.agent_request import AgentRequest, ProtocolType, ContentType
@@ -26,7 +27,7 @@ class ProcessorContext:
         self._replied = True
 
     def send_wechat(self, who: str, msg: str):
-        """发送微信消息（直接调用 wechat_gateway）"""
+        """发送微信文本消息"""
         import requests as _req
         from src.common.utils import cfg
         try:
@@ -34,6 +35,23 @@ class ProcessorContext:
             _req.post(url, json={"who": who, "msg": msg}, timeout=10)
         except Exception as e:
             logger.error("发送微信失败: %s", e)
+
+    def send_wechat_file(self, who: str, file_path: str, filename: str = ""):
+        """发送微信文件"""
+        import requests as _req
+        from src.common.utils import cfg
+        try:
+            url = cfg.get_service_url("wechat_gateway", "/api/gateway/send-file")
+            with open(file_path, "rb") as f:
+                _req.post(
+                    url,
+                    data={"who": who, "wxname": ""},
+                    files={"file": (filename or os.path.basename(file_path), f, "application/octet-stream")},
+                    timeout=30,
+                )
+            logger.info("文件已发送到 %s: %s", who, file_path)
+        except Exception as e:
+            logger.error("发送微信文件失败: %s", e)
 
     def download_file(self, file_id: str) -> Optional[bytes]:
         """从 wechat_gateway 下载文件"""
