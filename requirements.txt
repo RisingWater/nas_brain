@@ -1,8 +1,23 @@
+# === 核心框架 ===
 fastapi
-uvicorn
-Requests
-dotenv
-psutil
+uvicorn[standard]
+requests
 pydantic
 python-multipart
+python-dotenv
+
+# === 图像处理 ===
+opencv-python
+numpy
+img2pdf
+
+# === 音频 ===
 pyaudio
+
+# === 网页/文档 ===
+beautifulsoup4
+python-docx
+
+# === 可选（按需安装） ===
+# fpdf2          # write_pdf_file 工具需要
+# pypdf          # read_pdf_file 工具需要

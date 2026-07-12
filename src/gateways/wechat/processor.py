@@ -4,6 +4,7 @@ import uuid
 import json
 import logging
 import time
+import threading
 import requests
 from datetime import datetime
 from typing import Optional
@@ -124,7 +125,7 @@ class WeChatProcessor:
     # ---- 处理单条消息 ----
 
     def _process_one(self, msg: dict):
-        """处理一条微信消息：查用户 → 归一化 → 发到 brain_services"""
+        """处理一条微信消息：查用户 → 归一化 → 同步发到 brain_services（brain 立即返回）"""
         chat_name = msg.get("chat_name", "")
 
         user = self._find_user_by_wechat(chat_name)
@@ -147,23 +148,6 @@ class WeChatProcessor:
             )
             if resp.status_code == 200:
                 record_message()
-                data = resp.json().get("data", {})
-                reply_text = data.get("text", "")
-                if reply_text:
-                    logger.info("回复 %s: %.50s", chat_name, reply_text)
-                    self.wxauto.send_text_message(who=chat_name, msg=reply_text)
-                # 发送附件文件
-                for file_path in data.get("files", []):
-                    try:
-                        with open(file_path, "rb") as f:
-                            self.wxauto.send_file_data(
-                                who=chat_name, filename=os.path.basename(file_path), data=f.read(),
-                            )
-                        os.remove(file_path)
-                    except Exception as e:
-                        logger.error("发送文件失败: %s", e)
-            else:
-                logger.warning("brain_services 返回 %s: %s", resp.status_code, resp.text)
         except requests.RequestException as e:
             logger.error("发送到 brain_services 失败: %s", e)
 

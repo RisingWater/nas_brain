@@ -46,6 +46,11 @@ class LLMContextBuilder:
                 ctx_parts.append("你现在在微信群聊中，用户可能 @ 了你。")
             else:
                 ctx_parts.append("你现在在微信私聊中。")
+            ctx_parts.append(
+                "规则：\n"
+                "0. 必须用中文回答\n"
+                "1. 禁止使用markdown格式\n"
+            )
         elif protocol == "voice":
             ctx_parts.append(
                 "你正在通过语音与用户对话，回复会通过语音播放。\n"

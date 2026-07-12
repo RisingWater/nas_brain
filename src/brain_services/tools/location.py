@@ -1,9 +1,12 @@
-"""QB 设备位置/电量查询工具 — 通过 src.common.clients 实现，支持地图图片附件"""
+"""QB 设备位置/电量查询工具 — 支持地图图片附件"""
 import os
 import logging
 from src.common.clients.qb_location import QBLocation
 from src.common.clients.amap import AmapAPI
+from src.common.lib.coord_transform import bd09_to_gcj02
 from . import BaseTool, registry
+
+logger = logging.getLogger("brain_services.tools.location")
 
 logger = logging.getLogger("brain_services.tools.location")
 
@@ -34,12 +37,13 @@ class YuqiaoLocationTool(BaseTool):
 
             result = {"text": f"{name}（电量 {power}%）— {addr}", "files": []}
 
-            # 生成地图图片
+            # 生成地图图片（WGS-84 → GCJ-02 转换后发给高德）
             if lat and lon:
                 try:
+                    gcj_lon, gcj_lat = bd09_to_gcj02(float(lon), float(lat))
                     amap = AmapAPI()
                     save_path = amap.get_static_map(
-                        longitude=lon, latitude=lat,
+                        longitude=gcj_lon, latitude=gcj_lat,
                         zoom=16, size="600*600",
                     )
                     if save_path:
