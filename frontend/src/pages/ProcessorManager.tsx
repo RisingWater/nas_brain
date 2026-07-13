@@ -65,9 +65,6 @@ export default function ProcessorManager() {
     <>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Title level={4} style={{ margin: 0 }}>
-            <ApiOutlined /> 处理器管理
-          </Title>
           <Text type="secondary">{items.length} 个处理器</Text>
         </Col>
         <Col>

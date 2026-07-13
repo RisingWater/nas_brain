@@ -128,6 +128,9 @@ class ServiceManager:
                 return True  # 已在运行
             try:
                 cmd = shlex.split(svc.command)
+                # 用当前 venv 的 Python，而不是 PATH 里的
+                if cmd and cmd[0] in ("python", "python3"):
+                    cmd[0] = sys.executable
                 svc.process = subprocess.Popen(
                     cmd,
                     cwd=self._project_root,

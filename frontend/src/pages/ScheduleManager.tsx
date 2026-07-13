@@ -192,7 +192,6 @@ export default function ScheduleManager() {
     <>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Title level={4} style={{ margin: 0 }}>定时提醒管理</Title>
           <Text type="secondary">共 {total} 条</Text>
         </Col>
         <Col>

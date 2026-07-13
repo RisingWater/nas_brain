@@ -86,7 +86,6 @@ export default function ToolManager() {
     <>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Title level={4} style={{ margin: 0 }}>工具管理</Title>
           <Text type="secondary" style={{ fontSize: 12 }}>已加载 {tools.length} 个工具</Text>
         </Col>
         <Col>

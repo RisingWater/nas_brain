@@ -165,8 +165,6 @@ export default function ChatHistory() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
-      <Title level={4} style={{ marginBottom: 12 }}>聊天记录</Title>
-
       {/* 工具栏 */}
       <Row gutter={12} style={{ marginBottom: 12 }} align="middle">
         <Col flex="200px">

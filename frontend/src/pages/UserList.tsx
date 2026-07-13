@@ -235,7 +235,6 @@ export default function UserList() {
     <>
       {isMobile && (
         <Row gutter={[8, 8]} style={{ marginBottom: 12 }}>
-          <Col span={24}><Title level={4} style={{ margin: 0 }}>用户管理</Title></Col>
           <Col span={24}>
             <Space.Compact style={{ width: '100%' }}>
               <Input placeholder="搜索姓名/微信" value={keyword}

@@ -38,6 +38,7 @@ class VoiceProcessor:
         self._listener = None
         self._stt = STT()
         self._vp = VoiceprintEngine()
+        self._last_wakeword_id = None
 
     # ---- 公开方法 ----
 
@@ -221,31 +222,21 @@ class VoiceProcessor:
 
         self.set_state(STATE_IDLE)
 
-    # ---- 唤醒词回调 ----
+    # ---- 唤醒词回调（只保存音频，不处理） ----
 
     def _on_detection(self, name: str, score: float, timestamp: float,
                       audio: np.ndarray, sr: int):
+        """唤醒词回调 — 只保存音频，主循环里处理后续"""
         if self.get_state() != STATE_IDLE:
             return
         logger.info("检测到唤醒词: score=%.4f", score)
-
-        wakeword_id = self._save_wakeword_audio(audio, sr, score)
-
-        # 播放"我在呢" → 阻塞直到播完
-        self.play_sync("我在呢")
-
-        # VAD → 声纹 → STT → brain → TTS（在新线程中运行）
-        threading.Thread(
-            target=self._voice_pipeline,
-            args=(wakeword_id,),
-            daemon=True,
-        ).start()
+        self._last_wakeword_id = self._save_wakeword_audio(audio, sr, score)
 
     # ---- 主循环 ----
 
     def _run_loop(self):
         try:
-            from livekit import wakeword as ww
+            from livekit.wakeword import WakeWordModel, WakeWordListener
         except ImportError:
             logger.error("livekit-wakeword 未安装")
             return
@@ -255,15 +246,16 @@ class VoiceProcessor:
             return
 
         try:
-            model = ww.WakeWordModel(_MODEL_PATH)
+            model = WakeWordModel(models=[_MODEL_PATH])
             threshold = self._get_threshold()
             logger.info("唤醒词就绪，阈值=%.2f", threshold)
 
             async def listen():
-                listener = model.create_listener(
+                listener = WakeWordListener(
+                    model,
                     threshold=threshold,
                     debounce=1.0,
-                    on_detection=self._on_detection,
+                    on_detection_callback=self._on_detection,
                 )
                 self._listener = listener
                 logger.info("唤醒词监听已启动")
@@ -272,12 +264,20 @@ class VoiceProcessor:
                         if self.get_state() != STATE_IDLE:
                             await asyncio.sleep(0.1)
                             continue
-                        try:
-                            detection = await asyncio.wait_for(
-                                listener.wait_for_detection(), timeout=1.0
-                            )
-                        except asyncio.TimeoutError:
+                        detection = await listener.wait_for_detection()
+                        logger.info("WAKE! score=%.4f", detection.confidence)
+
+                        wakeword_id = getattr(self, '_last_wakeword_id', None)
+                        if not wakeword_id:
                             continue
+
+                        # 播"我在呢"（阻塞），播完开始管线
+                        self.play_sync("我在呢")
+                        threading.Thread(
+                            target=self._voice_pipeline,
+                            args=(wakeword_id,),
+                            daemon=True,
+                        ).start()
 
             import asyncio
             asyncio.run(listen())

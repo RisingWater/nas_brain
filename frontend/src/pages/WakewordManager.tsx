@@ -165,8 +165,6 @@ export default function WakewordManager() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>唤醒词管理</Title>
-
       {/* 阈值设置 */}
       <Row gutter={16} align="middle" style={{ marginBottom: 16 }}>
         <Col><Text strong>检测阈值：</Text></Col>

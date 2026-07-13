@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Layout, Menu, Button, theme } from 'antd';
 import {
   MenuFoldOutlined,
@@ -17,6 +17,9 @@ import {
   UserSwitchOutlined,
   SettingOutlined,
   RobotOutlined,
+  BellOutlined,
+  AppstoreOutlined,
+  FolderOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -26,7 +29,7 @@ const menuItems = [
   {
     key: 'brain', icon: <RobotOutlined />, label: '智能引擎',
     children: [
-      { key: '/users', label: '用户策略' },
+      { key: '/users', icon: <UserOutlined />, label: '用户策略' },
       { key: '/chat-history', icon: <MessageOutlined />, label: '聊天记录' },
       { key: '/memory', icon: <DatabaseOutlined />, label: '记忆管理' },
     ],
@@ -35,21 +38,21 @@ const menuItems = [
     key: 'voice', icon: <SoundOutlined />, label: '语音网关',
     children: [
       { key: '/wakeword', icon: <CustomerServiceOutlined />, label: '唤醒词' },
-      { key: '/voiceprints', icon: <UserSwitchOutlined />, label: '声纹' },
-      { key: '/tts-cache', label: 'TTS 缓存' },
+      { key: '/voiceprints', icon: <UserSwitchOutlined />, label: '声纹管理' },
+      { key: '/tts-cache', icon: <FolderOutlined />, label: 'TTS 缓存' },
     ],
   },
   {
     key: 'schedule', icon: <ClockCircleOutlined />, label: '定时任务',
     children: [
-      { key: '/schedules', label: '定时提醒' },
+      { key: '/schedules', icon: <BellOutlined />, label: '定时提醒' },
       { key: '/detectors', icon: <ThunderboltOutlined />, label: '定时任务' },
     ],
   },
   {
     key: 'tools', icon: <ToolOutlined />, label: '工具插件',
     children: [
-      { key: '/tools', label: '工具管理' },
+      { key: '/tools', icon: <AppstoreOutlined />, label: '工具管理' },
       { key: '/processors', icon: <ExperimentOutlined />, label: '处理器' },
     ],
   },

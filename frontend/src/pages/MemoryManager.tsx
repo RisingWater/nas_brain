@@ -94,8 +94,6 @@ export default function MemoryManager() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>记忆管理</Title>
-
       <Tabs
         items={[
           {

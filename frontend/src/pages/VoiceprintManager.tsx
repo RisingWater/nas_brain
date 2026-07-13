@@ -9,7 +9,7 @@ import {
 import type { UploadFile } from 'antd/es/upload/interface';
 import {
   listVoiceprints, deleteVoiceprint, getAudioUrl, moveVoiceprint,
-  listUsers, getThreshold, setThreshold, enrollVoiceprint, detectVoiceprint,
+  listUsers, getThreshold, setThreshold, uploadVoiceprint, detectVoiceprint,
 } from '../api/voiceprint';
 import type { Voiceprint, DetectResult } from '../api/voiceprint';
 
@@ -79,13 +79,9 @@ export default function VoiceprintManager() {
       message.warning('请选择用户和音频文件');
       return;
     }
-    // 上传文件到后端处理
-    const formData = new FormData();
-    if (enrollFiles[0].originFileObj) {
-      formData.append('file', enrollFiles[0].originFileObj);
-    }
     try {
-      await enrollVoiceprint(enrollUserId, [], '', 'manual');
+      const fileObj = enrollFiles[0].originFileObj || enrollFiles[0];
+      await uploadVoiceprint(enrollUserId, fileObj);
       message.success('声纹已注册');
       setEnrollOpen(false);
       setEnrollFiles([]);
@@ -104,8 +100,6 @@ export default function VoiceprintManager() {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>声纹管理</Title>
-
       <audio ref={audioRef} onEnded={() => setPlaying(null)} style={{ display: 'none' }} />
 
       {/* 阈值 */}
@@ -140,7 +134,15 @@ export default function VoiceprintManager() {
                   const vpId = parseInt(e.dataTransfer.getData('text/vp-id'));
                   if (vpId) handleDrop(vpId, user.user_id);
                 }}
-                extra={<Tag>{vpsByUser[user.user_id]?.length || 0} 条</Tag>}
+                extra={
+                  <Space>
+                    <Tag>{vpsByUser[user.user_id]?.length || 0} 条</Tag>
+                    <Button type="primary" size="small" icon={<PlusOutlined />}
+                      onClick={(e) => { e.stopPropagation(); setEnrollUserId(user.user_id); setEnrollOpen(true); }}>
+                      添加
+                    </Button>
+                  </Space>
+                }
               >
                 {(vpsByUser[user.user_id] || []).map((vp) => (
                   <div
@@ -179,9 +181,6 @@ export default function VoiceprintManager() {
       )}
 
       <Space style={{ marginTop: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setEnrollOpen(true)}>
-          添加声纹
-        </Button>
         <Button onClick={() => setDetectOpen(true)}>声纹检测</Button>
         <Button onClick={fetchAll}>刷新</Button>
       </Space>

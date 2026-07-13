@@ -1,8 +1,9 @@
 """db_services — 声纹管理"""
 import os
+import shutil
 import json
 import numpy as np
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from typing import Optional
 from ..db_connection import db
@@ -98,6 +99,40 @@ def enroll_voiceprint(req: VoiceprintEnrollRequest):
         conn.commit()
         return {"success": True, "id": cursor.lastrowid}
     except Exception as e:
+        raise HTTPException(400, f"注册失败: {e}")
+
+
+_VOICEPRINT_DIR = os.getenv("RECORD_DIR", "data/voiceprints")
+
+
+@router.post("/upload", status_code=201)
+async def upload_voiceprint(user_id: str = Form(...), file: UploadFile = File(...)):
+    """上传音频文件并注册声纹"""
+    os.makedirs(_VOICEPRINT_DIR, exist_ok=True)
+    ts = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S")
+    ext = os.path.splitext(file.filename or "audio.wav")[1] or ".wav"
+    filename = f"{user_id}_{ts}{ext}"
+    filepath = os.path.join(_VOICEPRINT_DIR, filename)
+    try:
+        with open(filepath, "wb") as f:
+            content = await file.read()
+            f.write(content)
+    except Exception as e:
+        raise HTTPException(400, f"文件保存失败: {e}")
+
+    conn = db.get_connection()
+    vec_bytes = _serialize_vector([])
+    try:
+        cursor = conn.execute(
+            "INSERT INTO voiceprints (user_id, vector, audio_path, vp_type) VALUES (?, ?, ?, ?)",
+            (user_id, vec_bytes, filepath, "manual"),
+        )
+        conn.commit()
+        return {"success": True, "id": cursor.lastrowid, "audio_path": filepath}
+    except Exception as e:
+        # 清理已保存的文件
+        try: os.remove(filepath)
+        except: pass
         raise HTTPException(400, f"注册失败: {e}")
 
 

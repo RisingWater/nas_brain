@@ -138,9 +138,6 @@ export default function TTSCacheManager() {
       {/* 操作栏 */}
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Title level={4} style={{ margin: 0 }}>
-            <SoundOutlined /> TTS 缓存管理
-          </Title>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {entries.length} 条缓存 {stats?.total_size ? `· 共 ${stats.total_size_str}` : ''}
           </Text>

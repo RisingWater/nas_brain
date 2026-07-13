@@ -250,6 +250,11 @@ async def _proxy_to_db(path: str, request: Request) -> JSONResponse:
         resp = await asyncio.to_thread(
             _req.request, request.method, url, data=body, headers=headers, timeout=15,
         )
+        content_type = resp.headers.get("content-type", "")
+        if "audio/" in content_type:
+            from fastapi.responses import Response
+            return Response(content=resp.content, media_type=content_type,
+                            headers=dict(resp.headers))
         return JSONResponse(content=resp.json(), status_code=resp.status_code)
     except Exception as e:
         return JSONResponse(
@@ -371,6 +376,10 @@ async def proxy_voiceprints_threshold(request: Request):
 @app.api_route("/api/admin/voiceprints/enroll", methods=["POST"])
 async def proxy_voiceprints_enroll(request: Request):
     return await _proxy_to_db("/api/voiceprints/enroll", request)
+
+@app.api_route("/api/admin/voiceprints/upload", methods=["POST"])
+async def proxy_voiceprints_upload(request: Request):
+    return await _proxy_to_db("/api/voiceprints/upload", request)
 
 @app.api_route("/api/admin/voiceprints/detect", methods=["POST"])
 async def proxy_voiceprints_detect(request: Request):

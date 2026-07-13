@@ -1,4 +1,4 @@
-# === 核心框架 ===
+# === Core ===
 fastapi
 uvicorn[standard]
 requests
@@ -6,28 +6,30 @@ pydantic
 python-multipart
 python-dotenv
 
-# === 图像/文档处理 ===
+# === Image/Doc ===
 opencv-python
 numpy
 img2pdf
 beautifulsoup4
 python-docx
 
-# === 音频 ===
+# === Audio ===
 pyaudio
 silero-vad
 webrtcvad
 
-# === 语音识别/声纹 ===
+# === STT / Voiceprint ===
 funasr
 modelscope
+addict
+datasets
 
-# === 唤醒词 ===
+# === Wakeword ===
 livekit-wakeword
 
-# === 音频处理 ===
+# === Audio Processing ===
 pydub
 
-# === 可选（按需安装） ===
-# fpdf2          # write_pdf_file 工具需要
-# pypdf          # read_pdf_file 工具需要
+# === Optional ===
+fpdf2
+pypdf

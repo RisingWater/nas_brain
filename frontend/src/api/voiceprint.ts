@@ -48,6 +48,16 @@ export async function enrollVoiceprint(
   });
 }
 
+export async function uploadVoiceprint(userId: string, file: File): Promise<any> {
+  const formData = new FormData();
+  formData.append('user_id', userId);
+  formData.append('file', file);
+  const { data } = await client.post('/admin/voiceprints/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
 export async function moveVoiceprint(vpId: number, targetUserId: string): Promise<void> {
   await client.put(`/admin/voiceprints/${vpId}/move`, null, {
     params: { target_user_id: targetUserId },

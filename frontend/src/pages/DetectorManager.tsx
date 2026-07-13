@@ -70,9 +70,6 @@ export default function DetectorManager() {
     <>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Title level={4} style={{ margin: 0 }}>
-            <ApiOutlined /> 定时任务管理
-          </Title>
           <Text type="secondary" style={{ fontSize: 12 }}>已加载 {detectors.length} 个任务</Text>
         </Col>
         <Col>

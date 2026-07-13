@@ -171,7 +171,6 @@ export default function StrategyConfig() {
 
   return (
     <>
-      <Title level={4} style={{ marginBottom: 16 }}>策略配置</Title>
       <Table
         columns={columns}
         dataSource={configs}

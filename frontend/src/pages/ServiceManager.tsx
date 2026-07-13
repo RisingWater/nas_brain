@@ -117,12 +117,9 @@ export default function ServiceManager() {
 
   return (
     <>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Col><Title level={4} style={{ margin: 0 }}>服务管理</Title></Col>
-        <Col>
-          <Button icon={<ReloadOutlined />} onClick={fetchServices}>刷新</Button>
-        </Col>
-      </Row>
+      <div style={{ textAlign: 'right', marginBottom: 16 }}>
+        <Button icon={<ReloadOutlined />} onClick={fetchServices}>刷新</Button>
+      </div>
 
       {isMobile ? (
         <Row gutter={[8, 8]}>
