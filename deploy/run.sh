@@ -79,6 +79,10 @@ if [ "$PULSE_STARTED" = true ]; then
     echo "Audio initialization complete"
 fi
 
+# ---- CUPS ----
+echo "Starting CUPS..."
+sudo cupsd 2>/dev/null && echo "CUPS started" || echo "CUPS start failed"
+
 # ---- 虚拟环境 ----
 cd /workdir
 if [ ! -d venv ]; then

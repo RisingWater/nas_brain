@@ -3,37 +3,41 @@ FROM ubuntu:24.04
 ENV UID=1002
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 替换为阿里云镜像加速
-RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
-    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+# 替换 apt 源为阿里云镜像（Ubuntu 24.04 使用 .sources 格式）
+RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/ubuntu.sources && \
+    sed -i 's|http://security.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/ubuntu.sources
 
-# 系统依赖
-RUN apt-get update && apt-get install -y \
-    sudo \
-    git \
-    vim \
-    curl \
-    python3 \
-    python3-pip \
-    python3-venv \
-    alsa-utils \
-    pulseaudio \
-    pulseaudio-utils \
-    ffmpeg \
-    sox \
-    libasound2-dev \
-    portaudio19-dev \
-    cups \
-    cups-client \
-    libreoffice \
+# 系统基础依赖（轻量）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sudo git curl vim \
+    python3 python3-pip python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# 音频依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    alsa-utils pulseaudio pulseaudio-utils \
+    ffmpeg sox libasound2-dev portaudio19-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# CUPS 打印
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cups cups-client printer-driver-hpcups \
+    && rm -rf /var/lib/apt/lists/*
+
+# LibreOffice（大包，不需要时可注释）
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
-    locales \
-    locales-all \
+    && rm -rf /var/lib/apt/lists/*
+
+# Locale
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    locales locales-all \
     && rm -rf /var/lib/apt/lists/*
 
 # 创建用户并加入组
 RUN useradd -m -u $UID appuser && \
-    usermod -a -G audio,pulse,pulse-access,sudo,lp,lpadmin appuser
+    usermod -a -G audio,pulse,pulse-access,sudo,lp,lpadmin appuser && \
+    echo "appuser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 # PulseAudio 配置
 RUN mkdir -p /var/run/pulse && \
@@ -59,7 +63,7 @@ WORKDIR /workdir
 
 # Node.js + Claude Code CLI + Bun
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get update && apt-get install -y nodejs && \
+    apt-get update && apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/* && \
     npm install -g @anthropic-ai/claude-code && \
     npm install -g bun
