@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Row, Col, Typography, Space, message, Popconfirm, Statistic, Tooltip, Tag,
+  Modal, Input,
 } from 'antd';
 import {
-  DeleteOutlined, ClearOutlined, ReloadOutlined, SoundOutlined,
+  DeleteOutlined, ClearOutlined, ReloadOutlined, SoundOutlined, PlaySquareOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { listTtsCache, getTtsCacheStats, deleteTtsCache, clearTtsCache } from '../api/tts';
+import { listTtsCache, getTtsCacheStats, deleteTtsCache, clearTtsCache, speakText } from '../api/tts';
 import type { TtsCacheEntry, TtsCacheStats } from '../types/tts';
 
 const { Title, Text } = Typography;
@@ -16,6 +17,24 @@ export default function TTSCacheManager() {
   const [stats, setStats] = useState<TtsCacheStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [playOpen, setPlayOpen] = useState(false);
+  const [playText, setPlayText] = useState('');
+  const [playing, setPlaying] = useState(false);
+
+  const handleSpeak = async () => {
+    if (!playText.trim()) return;
+    setPlaying(true);
+    try {
+      await speakText(playText.trim());
+      message.success('正在播放');
+      setPlayOpen(false);
+      setPlayText('');
+    } catch {
+      message.error('播放失败');
+    } finally {
+      setPlaying(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -144,6 +163,9 @@ export default function TTSCacheManager() {
         </Col>
         <Col>
           <Space>
+            <Button icon={<PlaySquareOutlined />} onClick={() => setPlayOpen(true)}>
+              播放文本
+            </Button>
             <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>
               刷新
             </Button>
@@ -174,6 +196,24 @@ export default function TTSCacheManager() {
         pagination={{ pageSize: 50, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
         size="small"
       />
+
+      {/* 播放文本弹窗 */}
+      <Modal
+        title="播放文本"
+        open={playOpen}
+        onCancel={() => { setPlayOpen(false); setPlayText(''); }}
+        onOk={handleSpeak}
+        confirmLoading={playing}
+        okText="播放"
+      >
+        <Input.TextArea
+          rows={4}
+          value={playText}
+          onChange={(e) => setPlayText(e.target.value)}
+          placeholder="输入要播放的文字…"
+          maxLength={1000}
+        />
+      </Modal>
     </>
   );
 }

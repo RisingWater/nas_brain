@@ -24,3 +24,7 @@ export async function clearTtsCache(): Promise<TtsCacheActionResponse> {
   const res = await client.delete<TtsCacheActionResponse>('/tts/cache');
   return res.data;
 }
+
+export async function speakText(text: string): Promise<void> {
+  await client.post('/speak/play', { text, sync: false });
+}

@@ -17,6 +17,14 @@ export default defineConfig({
         target: 'http://localhost:9031',
         changeOrigin: true,
       },
+      '/api/speak': {
+        target: 'http://localhost:9020',
+        changeOrigin: true,
+      },
+      '/api/tts': {
+        target: 'http://localhost:9020',
+        changeOrigin: true,
+      },
     },
   },
 })
