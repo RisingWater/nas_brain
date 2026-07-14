@@ -33,3 +33,5 @@ pydub
 # === Optional ===
 fpdf2
 pypdf
+
+simplejson
