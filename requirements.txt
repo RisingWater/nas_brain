@@ -35,3 +35,4 @@ fpdf2
 pypdf
 
 simplejson
+sortedcontainers
