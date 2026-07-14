@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  Card, Tabs, Input, Button, Select, Typography, message, Spin, Space, Tag, Empty, Modal,
+  Card, Tabs, Input, Button, Select, Typography, message, Spin, Space, Tag, Empty, Modal, Popconfirm,
 } from 'antd';
-import { EditOutlined, SaveOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { getLongTermMemory, saveLongTermMemory, getSummaries, triggerSummarize } from '../api/memory';
+import { EditOutlined, SaveOutlined, ReloadOutlined, ThunderboltOutlined, DeleteOutlined } from '@ant-design/icons';
+import { getLongTermMemory, saveLongTermMemory, getSummaries, triggerSummarize, clearSummaries } from '../api/memory';
 import type { ChatSummary } from '../api/memory';
 import { listUsers } from '../api/strategy';
 
@@ -58,6 +58,21 @@ export default function MemoryManager() {
   };
 
   const [summarizing, setSummarizing] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearSummaries = async () => {
+    if (!selectedUser) return;
+    setClearing(true);
+    try {
+      await clearSummaries(selectedUser);
+      message.success('中期记忆已清空');
+      setSummaries([]);
+    } catch {
+      message.error('清空失败');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const handleSummarize = async () => {
     if (!selectedUser) return;
@@ -170,6 +185,11 @@ export default function MemoryManager() {
                       <Button icon={<ThunderboltOutlined />} onClick={handleSummarize} loading={summarizing}>
                         立即总结
                       </Button>
+                      <Popconfirm title="确定清空该用户的所有中期记忆？" onConfirm={handleClearSummaries}>
+                        <Button icon={<DeleteOutlined />} loading={clearing} danger>
+                          清空
+                        </Button>
+                      </Popconfirm>
                     </Space>
                   )}
                 </Space>

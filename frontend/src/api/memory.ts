@@ -25,3 +25,7 @@ export async function getSummaries(userId: string): Promise<ChatSummary[]> {
   const { data } = await client.get(`/admin/chat-summaries/${userId}/list`);
   return data.items;  // db_services 返回 flat JSON
 }
+
+export async function clearSummaries(userId: string): Promise<void> {
+  await client.delete(`/admin/chat-summaries/${userId}`);
+}

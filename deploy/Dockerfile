@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # CUPS 打印
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cups cups-client printer-driver-hpcups \
+    cups cups-client printer-driver-hpcups libcups2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # LibreOffice（大包，不需要时可注释）

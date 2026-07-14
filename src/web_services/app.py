@@ -297,6 +297,10 @@ async def proxy_chat_messages_search(request: Request):
 async def proxy_chat_summaries_latest(user_id: str, request: Request):
     return await _proxy_to_db(f"/api/chat-summaries/{user_id}/latest", request)
 
+@app.api_route("/api/admin/chat-summaries/{user_id}", methods=["DELETE"])
+async def proxy_chat_summaries_delete(user_id: str, request: Request):
+    return await _proxy_to_db(f"/api/chat-summaries/{user_id}", request)
+
 
 # ---- 长期记忆 API (直接读写 memory.md) ----
 _MEMORY_FILE = os.getenv("MEMORY_FILE", os.path.join(os.path.dirname(__file__), "..", "..", "data", "memory.md"))
