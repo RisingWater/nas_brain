@@ -36,3 +36,4 @@ pypdf
 
 simplejson
 sortedcontainers
+pycups
