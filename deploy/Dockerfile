@@ -7,10 +7,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/ubuntu.sources && \
     sed -i 's|http://security.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/ubuntu.sources
 
-# 系统基础依赖（轻量）
+# 系统基础依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo git curl vim \
     python3 python3-pip python3-venv \
+    build-essential python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # 音频依赖
