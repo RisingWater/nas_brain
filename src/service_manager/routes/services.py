@@ -1,9 +1,14 @@
 """service_manager API 路由"""
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from ..manager import ServiceManager
 from ..schema.services_schema import (
     ServiceListResponse, ServiceActionResponse, ServiceInfoResponse,
 )
+
+
+class EnableRequest(BaseModel):
+    enable: bool
 
 router = APIRouter()
 
@@ -48,6 +53,16 @@ def stop_service(name: str):
     if not ok:
         raise HTTPException(500, f"停止 '{name}' 失败")
     return ServiceActionResponse(message=f"'{name}' 已停止")
+
+
+@router.put("/{name}/enable", response_model=ServiceActionResponse)
+def enable_service(name: str, body: EnableRequest):
+    """启用或禁用服务"""
+    svc = _manager.set_enable(name, body.enable)
+    if not svc:
+        raise HTTPException(404, f"服务 '{name}' 不存在")
+    action = "启用" if body.enable else "禁用"
+    return ServiceActionResponse(message=f"'{name}' 已{action}")
 
 
 @router.post("/{name}/restart", response_model=ServiceActionResponse)

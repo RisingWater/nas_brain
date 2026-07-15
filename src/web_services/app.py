@@ -74,6 +74,10 @@ async def proxy_service_stop(name: str, request: Request):
 async def proxy_service_restart(name: str, request: Request):
     return await _proxy_to_sm(f"/api/services/{name}/restart", request)
 
+@app.api_route("/api/services/{name}/enable", methods=["PUT"])
+async def proxy_service_enable(name: str, request: Request):
+    return await _proxy_to_sm(f"/api/services/{name}/enable", request)
+
 
 # ---- 代理 /api/tools → brain_services:9031 ----
 async def _proxy_to_brain(path: str, request: Request) -> JSONResponse:

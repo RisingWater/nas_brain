@@ -28,16 +28,19 @@ def _find_project_root() -> str:
 class ServiceInfo:
     """单个服务的运行时信息"""
 
-    def __init__(self, name: str, command: str, description: str = ""):
+    def __init__(self, name: str, command: str, description: str = "", enable: bool = True):
         self.name = name
         self.command = command
         self.description = description
+        self.enable = enable
         self.process: Optional[subprocess.Popen] = None
         self.pid: Optional[int] = None
         self._lock = threading.Lock()
 
     @property
     def status(self) -> str:
+        if not self.enable:
+            return "disabled"
         if self.process is None:
             return "stopped"
         ret = self.process.poll()
@@ -50,6 +53,7 @@ class ServiceInfo:
             "name": self.name,
             "command": self.command,
             "description": self.description,
+            "enable": self.enable,
             "status": self.status,
             "pid": self.process.pid if self.process and self.process.poll() is None else None,
         }
@@ -76,6 +80,7 @@ class ServiceManager:
                 name=entry["name"],
                 command=entry["command"],
                 description=entry.get("description", ""),
+                enable=entry.get("enable", True),
             )
             self._services[svc.name] = svc
 
@@ -89,9 +94,10 @@ class ServiceManager:
     # ---- 启停 ----
 
     def start_all(self):
-        """启动所有已注册的服务"""
+        """启动所有开启的服务"""
         for svc in self._services.values():
-            self._start_one(svc)
+            if svc.enable:
+                self._start_one(svc)
 
     def stop_all(self):
         """停止所有服务"""
@@ -119,6 +125,33 @@ class ServiceManager:
             return False
         self._stop_one(svc)
         return self._start_one(svc)
+
+    def set_enable(self, name: str, enable: bool) -> Optional[ServiceInfo]:
+        """设置服务的 enable 状态，并同步到配置文件"""
+        svc = self._services.get(name)
+        if not svc:
+            return None
+        svc.enable = enable
+        if not enable:
+            self._stop_one(svc)  # 禁用时自动停止
+        self._save_config()
+        return svc
+
+    def _save_config(self):
+        """将当前服务配置写回 JSON 文件"""
+        config_path = os.getenv("SERVICE_MANAGER_CONFIG", "deploy/service_config.json")
+        if not os.path.isabs(config_path):
+            config_path = os.path.join(self._project_root, config_path)
+        entries = []
+        for svc in self._services.values():
+            entries.append({
+                "name": svc.name,
+                "description": svc.description,
+                "command": svc.command,
+                "enable": svc.enable,
+            })
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(entries, f, ensure_ascii=False, indent=2)
 
     # ---- 内部 ----
 

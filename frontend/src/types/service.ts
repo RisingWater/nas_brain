@@ -2,7 +2,8 @@ export interface ServiceInfo {
   name: string;
   command: string;
   description: string;
-  status: 'running' | 'stopped' | string;
+  enable: boolean;
+  status: 'running' | 'stopped' | 'disabled' | string;
   pid: number | null;
 }
 

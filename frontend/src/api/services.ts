@@ -20,3 +20,8 @@ export async function restartService(name: string): Promise<ServiceActionRespons
   const res = await client.post<ServiceActionResponse>(`/services/${name}/restart`);
   return res.data;
 }
+
+export async function enableService(name: string, enable: boolean): Promise<ServiceActionResponse> {
+  const res = await client.put<ServiceActionResponse>(`/services/${name}/enable`, { enable });
+  return res.data;
+}

@@ -7,6 +7,7 @@ class ServiceInfoResponse(BaseModel):
     name: str
     command: str
     description: str
+    enable: bool = True
     status: str
     pid: Optional[int] = None
 
