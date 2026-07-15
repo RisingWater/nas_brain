@@ -29,7 +29,8 @@ class LLMContextBuilder:
 
     def build(self, user_id: str, config: dict, current_msg: str,
               protocol: str = "wechat", chat_type: str = "private",
-              exclude_msg_id: int | None = None) -> list[dict]:
+              exclude_msg_id: int | None = None,
+              sender: str = "") -> list[dict]:
         """构建 OpenAI-format messages 列表"""
         messages = []
 
@@ -93,7 +94,10 @@ class LLMContextBuilder:
             messages.append(msg)
 
         # 5. Current user message
-        messages.append({"role": "user", "content": current_msg})
+        msg_content = current_msg
+        if sender and chat_type == "group":
+            msg_content = f"{sender}: {current_msg}"
+        messages.append({"role": "user", "content": msg_content})
 
         return messages
 
@@ -132,9 +136,20 @@ class LLMContextBuilder:
                         continue
                     role = msg.get("role", "")
                     if role in ("user", "assistant"):
+                        content = msg.get("content") or ""
+                        # 群聊消息中附带发送者名字
+                        msg_meta = msg.get("metadata", {})
+                        if isinstance(msg_meta, str):
+                            try:
+                                msg_meta = json.loads(msg_meta)
+                            except Exception:
+                                msg_meta = {}
+                        sender = msg_meta.get("sender", "") if isinstance(msg_meta, dict) else ""
+                        if sender and role == "user":
+                            content = f"{sender}: {content}"
                         entry = {
                             "role": role,
-                            "content": msg.get("content") or "",
+                            "content": content,
                         }
                         # 恢复 tool_calls（存储在 DB 的 tool_calls 字段）
                         tc = msg.get("tool_calls")

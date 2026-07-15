@@ -72,16 +72,16 @@ class StrategyEngine:
         # 0. 获取配置
         config = self.get_user_config(req.user_id)
 
-        # 1. 检查是否跳过
+        # 1. 先记录消息到 DB（即使后续跳过也要记录，供上下文使用）
+        user_msg_id = self.recorder.record_user_message(req)
+
+        # 2. 检查是否跳过（群聊无 @）
         if self.should_skip(req, config):
             return AgentResponse(data={
                 "request_id": req.request_id,
                 "text": "",
                 "skipped": True,
             })
-
-        # 2. 记录用户消息到 DB，记录返回的 msg_id 用于后续可能的删除
-        user_msg_id = self.recorder.record_user_message(req)
 
         # 3. Ignore 策略：只记录不处理
         strategy = self.get_strategy(req, config)
@@ -122,6 +122,7 @@ class StrategyEngine:
     def _process_smart(self, req: AgentRequest, config: dict, user_msg_id: int | None = None) -> AgentResponse:
         """Smart 模式：LLM + 工具调用"""
         # 构建上下文
+        sender = (req.metadata or {}).get("sender", "") if hasattr(req, 'metadata') else ""
         messages = self.context_builder.build(
             user_id=req.user_id,
             config=config,
@@ -129,6 +130,7 @@ class StrategyEngine:
             protocol=req.protocol.value if hasattr(req.protocol, 'value') else str(req.protocol),
             chat_type=req.chat_type.value if hasattr(req.chat_type, 'value') else str(req.chat_type),
             exclude_msg_id=user_msg_id,
+            sender=sender,
         )
 
         # 过滤工具

@@ -85,6 +85,7 @@ class WeChatProcessor:
             "wechat_name": chat_name,
             "raw_chat_type": raw_chat_type,
             "message_id": msg.get("id", ""),
+            "sender": msg.get("sender_remark") or "" if raw_chat_type == "group" else chat_name,
         }
 
         if msg_type == "text":

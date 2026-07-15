@@ -60,6 +60,10 @@ class LogManager:
         # 让根 logger 放过所有级别（由 handler 自己控制过滤）
         logging.root.setLevel(logging.DEBUG)
 
+        # 抑制第三方库的 DEBUG 日志，只保留 WARNING 以上
+        for lib in ("urllib3", "requests", "httpcore", "httpx"):
+            logging.getLogger(lib).setLevel(logging.WARNING)
+
         # 磁盘持久化
         _ensure_log_dir()
         file_handler = logging.handlers.RotatingFileHandler(
