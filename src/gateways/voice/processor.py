@@ -265,13 +265,33 @@ class VoiceProcessor:
             buffer: list[np.ndarray] = []
             last_detection_time = 0.0
             debounce = 1.0
+            check_counter = 0
 
             while self._running:
                 # 非 IDLE 状态（播放/录音/处理中）→ 清缓存跳过
                 if self.get_state() != STATE_IDLE:
                     buffer.clear()
-                    time.sleep(0.05)
+                    time.sleep(frame_samples / 16000)  # 等一帧的时间
                     continue
+
+                # 每积累 80000 采样数检查一次帧大小变化（约 5 秒）
+                check_counter += 1
+                if check_counter * frame_samples >= 80000:
+                    check_counter = 0
+                    new_fs = self._get_frame_samples()
+                    if new_fs != frame_samples:
+                        logger.info("帧大小 %d → %d，重开音频流", frame_samples, new_fs)
+                        stream.close()
+                        frame_samples = new_fs
+                        buffer_frames = max(1, 32000 // frame_samples)
+                        buffer.clear()
+                        stream = pa.open(
+                            format=pyaudio.paInt16,
+                            channels=1,
+                            rate=16000,
+                            input=True,
+                            frames_per_buffer=frame_samples,
+                        )
 
                 # 读一帧音频
                 data = stream.read(frame_samples, exception_on_overflow=False)
