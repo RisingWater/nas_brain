@@ -71,14 +71,14 @@ class VoiceprintEngine:
                 # 注册声纹（临时用户也注册，后续可手动分配）
                 self._enroll_to_db(user_id, vector_list, wav_path)
 
-                # 移动音频到用户目录
-                self._move_audio(wav_path, user_id)
-                return user_id, speaker
+                # 移动音频到用户目录，返回新路径
+                new_path = self._move_audio(wav_path, user_id)
+                return user_id, speaker, new_path
 
         except Exception as e:
             logger.error("声纹检测失败: %s", e)
 
-        return _TEMP_USER_ID, "未知用户"
+        return _TEMP_USER_ID, "未知用户", wav_path
 
     def _enroll_to_db(self, user_id: str, vector: list, audio_path: str):
         """注册声纹到 db_services"""

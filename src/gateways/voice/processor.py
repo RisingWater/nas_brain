@@ -45,14 +45,27 @@ class VoiceProcessor:
         if self._running:
             return
         self._running = True
-        # 初始化 VAD
+
+        # 1. 初始化 VAD（加载 Silero 模型）
         try:
             vad_init()
+            # 触发 VAD 模型预加载
+            from .audio_manager import AudioManager
+            mgr = getattr(vad_init, '_mgr', None)
+            from .vad import _audio_mgr
+            if _audio_mgr:
+                _audio_mgr._get_vad()
         except Exception as e:
             logger.warning("VAD 初始化失败: %s", e)
-        # 异步加载模型
-        threading.Thread(target=self._load_models, daemon=True).start()
-        # 启动唤醒词检测
+
+        # 2. 同步加载 STT 和声纹模型（全部就绪再开始检测唤醒词）
+        try:
+            self._stt.load()
+            self._vp.load()
+        except Exception as e:
+            logger.error("模型加载失败: %s", e)
+
+        # 3. 启动唤醒词检测
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
         logger.info("语音处理器已启动")
@@ -84,19 +97,6 @@ class VoiceProcessor:
     def set_state(self, s: int):
         with self._lock:
             self._state = s
-
-    # ---- 模型加载 ----
-
-    def _load_models(self):
-        """后台加载 STT 和声纹模型"""
-        try:
-            self._stt.load()
-        except Exception as e:
-            logger.error("STT 模型加载失败: %s", e)
-        try:
-            self._vp.load()
-        except Exception as e:
-            logger.error("声纹模型加载失败: %s", e)
 
     # ---- 唤醒词检测 ----
 
@@ -179,18 +179,19 @@ class VoiceProcessor:
 
         self.set_state(STATE_PROCESSING)
 
-        # 声纹识别
+        # 声纹识别（会移动音频文件到用户目录，返回新路径）
         user_id = "u_temp_voice"
         speaker = "未知用户"
+        audio_path = wav_path  # 后续 STT 用这个路径（声纹可能已移动文件）
         try:
-            user_id, speaker = self._vp.detect(wav_path, wakeword_id)
+            user_id, speaker, audio_path = self._vp.detect(wav_path, wakeword_id)
         except Exception as e:
             logger.warning("声纹识别失败: %s", e)
 
-        # STT 转文字
+        # STT 转文字（用声纹返回的路径，可能已被移动）
         text = ""
         try:
-            text = self._stt.transcribe(wav_path)
+            text = self._stt.transcribe(audio_path)
             logger.info("STT 结果: %s", text[:100])
         except Exception as e:
             logger.warning("STT 失败: %s", e)
