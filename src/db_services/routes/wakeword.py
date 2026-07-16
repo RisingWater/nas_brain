@@ -103,6 +103,36 @@ def set_frame_samples(body: dict):
     return {"success": True, "frame_samples": fs}
 
 
+# ---- 静音判定 ----
+_KV_SILENCE_KEY = "vad_silence_ms"
+_DEFAULT_SILENCE = 1600
+
+
+@router.get("/vad-silence")
+def get_vad_silence():
+    conn = db.get_connection()
+    row = conn.execute("SELECT value FROM kv_store WHERE key = ?", (_KV_SILENCE_KEY,)).fetchone()
+    if not row:
+        return {"silence_ms": _DEFAULT_SILENCE}
+    return {"silence_ms": int(row[0])}
+
+
+@router.put("/vad-silence")
+def set_vad_silence(body: dict):
+    ms = int(body.get("silence_ms", _DEFAULT_SILENCE))
+    ms = max(200, min(10000, ms))
+    conn = db.get_connection()
+    conn.execute(
+        """INSERT INTO kv_store (key, value, namespace, updated_at)
+           VALUES (?, ?, 'wakeword', CURRENT_TIMESTAMP)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value,
+                                          updated_at = CURRENT_TIMESTAMP""",
+        (_KV_SILENCE_KEY, str(ms)),
+    )
+    conn.commit()
+    return {"success": True, "silence_ms": ms}
+
+
 # ---- 记录 ----
 @router.post("/records", status_code=201)
 def create_record(req: WakewordRecordCreate):

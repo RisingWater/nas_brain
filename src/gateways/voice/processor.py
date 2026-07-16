@@ -110,6 +110,17 @@ class VoiceProcessor:
             pass
         return _DEFAULT_THRESHOLD
 
+    def _get_vad_silence(self) -> int:
+        """从 DB 获取静音判定毫秒数"""
+        try:
+            url = cfg.get_service_url("db_services", "/api/wakeword/vad-silence")
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                return resp.json().get("silence_ms", 1600)
+        except Exception:
+            pass
+        return 1600
+
     def _get_frame_samples(self) -> int:
         """从 DB 获取帧大小（每次 pyaudio 读取的采样数）"""
         try:
@@ -171,7 +182,8 @@ class VoiceProcessor:
         # VAD 录音
         self.set_state(STATE_RECORDING)
         try:
-            wav_path = vad_record(timeout_sec=_VAD_TIMEOUT, silence_ms=_VAD_SILENCE)
+            silence_ms = self._get_vad_silence()
+            wav_path = vad_record(timeout_sec=_VAD_TIMEOUT, silence_ms=silence_ms)
         except Exception as e:
             logger.error("VAD 录音失败: %s", e)
             self.set_state(STATE_IDLE)

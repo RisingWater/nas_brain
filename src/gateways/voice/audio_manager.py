@@ -53,7 +53,7 @@ class AudioManager:
         frames = []
         speech_frames = []  # 用于 VAD 检测的缓存
         silent_chunks = 0
-        silence_chunks_needed = int((silence_ms / 1000) * RECORD_SAMPLE_RATE / FRAMES_PER_BUFFER)
+        silence_chunks_needed = max(1, int(silence_ms / 1000))  # 每秒检一次，800ms→1次
         max_chunks = int(timeout_sec * RECORD_SAMPLE_RATE / FRAMES_PER_BUFFER)
         chunk_count = 0
 

@@ -359,6 +359,10 @@ async def proxy_wakeword_threshold(request: Request):
 async def proxy_wakeword_frame_samples(request: Request):
     return await _proxy_to_db("/api/wakeword/frame-samples", request)
 
+@app.api_route("/api/admin/wakeword/vad-silence", methods=["GET", "PUT"])
+async def proxy_wakeword_vad_silence(request: Request):
+    return await _proxy_to_db("/api/wakeword/vad-silence", request)
+
 @app.api_route("/api/admin/wakeword/records", methods=["GET", "POST"])
 async def proxy_wakeword_records(request: Request):
     return await _proxy_to_db("/api/wakeword/records", request)

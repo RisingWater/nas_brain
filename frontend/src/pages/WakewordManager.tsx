@@ -7,7 +7,7 @@ import { CheckOutlined, CloseOutlined, QuestionOutlined, PlayCircleOutlined } fr
 import type { ColumnsType } from 'antd/es/table';
 import {
   getThreshold, setThreshold, listRecords, updateCategory, getAudioUrl,
-  getFrameSamples, setFrameSamples,
+  getFrameSamples, setFrameSamples, getVadSilence, setVadSilence,
 } from '../api/wakeword';
 import type { WakewordRecord } from '../api/wakeword';
 
@@ -27,6 +27,7 @@ const categoryLabels: Record<string, string> = {
 export default function WakewordManager() {
   const [threshold, setThresholdVal] = useState(0.7);
   const [frameSamples, setFrameSamplesVal] = useState(3200);
+  const [vadSilence, setVadSilenceVal] = useState(1600);
   const [records, setRecords] = useState<WakewordRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -80,9 +81,28 @@ export default function WakewordManager() {
     }
   };
 
+  const fetchVadSilence = async () => {
+    try {
+      const ms = await getVadSilence();
+      setVadSilenceVal(ms);
+    } catch {
+      message.error('加载静音判定失败');
+    }
+  };
+
+  const handleVadSilenceSave = async () => {
+    try {
+      await setVadSilence(vadSilence);
+      message.success('静音判定已保存');
+    } catch {
+      message.error('保存失败');
+    }
+  };
+
   useEffect(() => {
     fetchThreshold();
     fetchFrameSamples();
+    fetchVadSilence();
   }, []);
 
   useEffect(() => {
@@ -243,6 +263,34 @@ export default function WakewordManager() {
         </Col>
         <Col>
           <Button type="primary" onClick={handleFrameSamplesSave}>保存帧大小</Button>
+        </Col>
+      </Row>
+
+      {/* 静音判定设置 */}
+      <Row gutter={16} align="middle" style={{ marginBottom: 16 }}>
+        <Col><Text strong>静音判定（毫秒）：</Text></Col>
+        <Col flex="300px">
+          <Slider
+            min={200}
+            max={5000}
+            step={100}
+            value={vadSilence}
+            onChange={setVadSilenceVal}
+            marks={{ 200: '200', 1600: '1600', 3000: '3000', 5000: '5000' }}
+          />
+        </Col>
+        <Col>
+          <InputNumber
+            min={200}
+            max={10000}
+            step={100}
+            value={vadSilence}
+            onChange={(v) => setVadSilenceVal(v || 1600)}
+            style={{ width: 100 }}
+          />
+        </Col>
+        <Col>
+          <Button type="primary" onClick={handleVadSilenceSave}>保存静音判定</Button>
         </Col>
       </Row>
 

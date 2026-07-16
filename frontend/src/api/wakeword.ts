@@ -48,3 +48,12 @@ export async function getFrameSamples(): Promise<number> {
 export async function setFrameSamples(frame_samples: number): Promise<void> {
   await client.put('/admin/wakeword/frame-samples', { frame_samples });
 }
+
+export async function getVadSilence(): Promise<number> {
+  const { data } = await client.get('/admin/wakeword/vad-silence');
+  return data.silence_ms;
+}
+
+export async function setVadSilence(silence_ms: number): Promise<void> {
+  await client.put('/admin/wakeword/vad-silence', { silence_ms });
+}

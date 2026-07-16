@@ -93,12 +93,14 @@ class VoiceprintEngine:
         except Exception as e:
             logger.error("声纹注册失败: %s", e)
 
-    def _move_audio(self, wav_path: str, user_id: str):
-        """移动录音到用户目录"""
+    def _move_audio(self, wav_path: str, user_id: str) -> str:
+        """移动录音到用户目录，返回新路径"""
         try:
             target_dir = os.path.join(_RECORD_DIR, user_id)
             os.makedirs(target_dir, exist_ok=True)
             target = os.path.join(target_dir, os.path.basename(wav_path))
             shutil.move(wav_path, target)
+            return target
         except Exception as e:
             logger.warning("移动音频失败: %s", e)
+            return wav_path  # 移动失败返回原始路径
