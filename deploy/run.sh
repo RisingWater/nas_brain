@@ -73,6 +73,16 @@ if [ "$PULSE_STARTED" = true ]; then
         echo "WARNING: ALSA sink load failed, speaker may not work"
     fi
 
+    echo "Loading ALSA source (microphone)..."
+    SOURCE_MODULE=$(pactl load-module module-alsa-source device=hw:0,0 source_name=alsa_input 2>/dev/null || true)
+    if [ -n "$SOURCE_MODULE" ]; then
+        echo "ALSA source loaded, module: $SOURCE_MODULE"
+        pactl set-default-source alsa_input
+        pactl set-source-volume alsa_input 100% 2>/dev/null || true
+    else
+        echo "WARNING: ALSA source load failed, microphone may not work"
+    fi
+
     echo "Audio devices:"
     pactl list sinks short 2>/dev/null || true
     pactl list sources short 2>/dev/null || true

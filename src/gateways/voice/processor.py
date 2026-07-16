@@ -253,6 +253,13 @@ class VoiceProcessor:
             buffer_frames = max(1, 32000 // frame_samples)  # ~2 秒的帧数
 
             pa = pyaudio.PyAudio()
+            # 列出输入设备
+            for i in range(pa.get_device_count()):
+                info = pa.get_device_info_by_index(i)
+                if info["maxInputChannels"] > 0:
+                    logger.info("音频设备[%d]: %s (输入=%d, 采样率=%.0f)",
+                                i, info["name"], info["maxInputChannels"], info["defaultSampleRate"])
+            # 先用默认设备，如果没声音可以改为 input_device_index=0
             stream = pa.open(
                 format=pyaudio.paInt16,
                 channels=1,
@@ -297,6 +304,9 @@ class VoiceProcessor:
                 # 读一帧音频
                 data = stream.read(frame_samples, exception_on_overflow=False)
                 frame = np.frombuffer(data, dtype=np.int16)
+                max_amp = np.max(np.abs(frame))
+                if max_amp > 500:  # 有声音时才打个日志，避免刷屏
+                    logger.debug("音频电平: max=%d, len=%d", max_amp, len(frame))
                 buffer.append(frame)
 
                 # 只保留最近 buffer_frames 帧
