@@ -238,6 +238,21 @@ class VoiceProcessor:
         try:
             import pyaudio
             from livekit.wakeword import WakeWordModel
+            # ---- ONNX Runtime 补丁（必须在任何 onnxruntime 使用前执行） ----
+            import onnxruntime as ort
+            _orig_init = ort.InferenceSession.__init__
+            def _patched_init(self, path, sess_options=None, providers=None, **kw):
+                if sess_options is None:
+                    sess_options = ort.SessionOptions()
+                sess_options.intra_op_num_threads = 1
+                sess_options.inter_op_num_threads = 1
+                sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+                sess_options.enable_mem_pattern = False
+                sess_options.enable_cpu_mem_arena = False
+                if providers is None:
+                    providers = ["CPUExecutionProvider"]
+                _orig_init(self, path, sess_options=sess_options, providers=providers, **kw)
+            ort.InferenceSession.__init__ = _patched_init
         except ImportError:
             logger.error("livekit-wakeword 或 pyaudio 未安装")
             return
