@@ -35,10 +35,8 @@ class VoiceProcessor:
         self._lock = threading.Lock()
         self._running = False
         self._thread: threading.Thread | None = None
-        self._listener = None
         self._stt = STT()
         self._vp = VoiceprintEngine()
-        self._last_wakeword_id = None
 
     # ---- 公开方法 ----
 
@@ -110,6 +108,17 @@ class VoiceProcessor:
         except Exception:
             pass
         return _DEFAULT_THRESHOLD
+
+    def _get_frame_samples(self) -> int:
+        """从 DB 获取帧大小（每次 pyaudio 读取的采样数）"""
+        try:
+            url = cfg.get_service_url("db_services", "/api/wakeword/frame-samples")
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                return resp.json().get("frame_samples", 3200)
+        except Exception:
+            pass
+        return 3200
 
     def _save_wakeword_audio(self, audio: np.ndarray, sr: int, score: float) -> str:
         """保存唤醒音频，返回 (filepath, wakeword_id)"""
@@ -222,23 +231,14 @@ class VoiceProcessor:
 
         self.set_state(STATE_IDLE)
 
-    # ---- 唤醒词回调（只保存音频，不处理） ----
-
-    def _on_detection(self, name: str, score: float, timestamp: float,
-                      audio: np.ndarray, sr: int):
-        """唤醒词回调 — 只保存音频，主循环里处理后续"""
-        if self.get_state() != STATE_IDLE:
-            return
-        logger.info("检测到唤醒词: score=%.4f", score)
-        self._last_wakeword_id = self._save_wakeword_audio(audio, sr, score)
-
-    # ---- 主循环 ----
+    # ---- 主循环（自己控制采集，不用 WakeWordListener） ----
 
     def _run_loop(self):
         try:
-            from livekit.wakeword import WakeWordModel, WakeWordListener
+            import pyaudio
+            from livekit.wakeword import WakeWordModel
         except ImportError:
-            logger.error("livekit-wakeword 未安装")
+            logger.error("livekit-wakeword 或 pyaudio 未安装")
             return
 
         if not os.path.exists(_MODEL_PATH):
@@ -248,39 +248,67 @@ class VoiceProcessor:
         try:
             model = WakeWordModel(models=[_MODEL_PATH])
             threshold = self._get_threshold()
-            logger.info("唤醒词就绪，阈值=%.2f", threshold)
+            frame_samples = self._get_frame_samples()
+            buffer_frames = max(1, 32000 // frame_samples)  # ~2 秒的帧数
 
-            async def listen():
-                listener = WakeWordListener(
-                    model,
-                    threshold=threshold,
-                    debounce=1.0,
-                    on_detection_callback=self._on_detection,
-                )
-                self._listener = listener
-                logger.info("唤醒词监听已启动")
-                async with listener:
-                    while self._running:
-                        if self.get_state() != STATE_IDLE:
-                            await asyncio.sleep(0.1)
-                            continue
-                        detection = await listener.wait_for_detection()
-                        logger.info("WAKE! score=%.4f", detection.confidence)
+            pa = pyaudio.PyAudio()
+            stream = pa.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                frames_per_buffer=frame_samples,
+            )
+            logger.info("唤醒词就绪，阈值=%.2f, 帧大小=%d, 缓冲帧数=%d",
+                         threshold, frame_samples, buffer_frames)
 
-                        wakeword_id = getattr(self, '_last_wakeword_id', None)
-                        if not wakeword_id:
-                            continue
+            buffer: list[np.ndarray] = []
+            last_detection_time = 0.0
+            debounce = 1.0
 
-                        # 播"我在呢"（阻塞），播完开始管线
-                        self.play_sync("我在呢")
-                        threading.Thread(
-                            target=self._voice_pipeline,
-                            args=(wakeword_id,),
-                            daemon=True,
-                        ).start()
+            while self._running:
+                # 非 IDLE 状态（播放/录音/处理中）→ 清缓存跳过
+                if self.get_state() != STATE_IDLE:
+                    buffer.clear()
+                    time.sleep(0.05)
+                    continue
 
-            import asyncio
-            asyncio.run(listen())
+                # 读一帧音频
+                data = stream.read(frame_samples, exception_on_overflow=False)
+                frame = np.frombuffer(data, dtype=np.int16)
+                buffer.append(frame)
+
+                # 只保留最近 buffer_frames 帧
+                while len(buffer) > buffer_frames:
+                    buffer.pop(0)
+
+                # 凑够 buffer_frames 帧才推理
+                if len(buffer) < buffer_frames:
+                    continue
+
+                chunk = np.concatenate(buffer)
+                scores = model.predict(chunk)
+                best = max(scores.values()) if scores else 0.0
+
+                now = time.time()
+                if best >= threshold and (now - last_detection_time) >= debounce:
+                    last_detection_time = now
+                    logger.info("检测到唤醒词: score=%.4f", best)
+
+                    # 保存唤醒音频
+                    wakeword_id = self._save_wakeword_audio(chunk, 16000, best)
+                    buffer.clear()  # 清缓存，避免重复检测
+
+                    # 播"我在呢" → VAD → 声纹 → STT → brain → TTS
+                    self.play_sync("我在呢")
+                    threading.Thread(
+                        target=self._voice_pipeline,
+                        args=(wakeword_id,),
+                        daemon=True,
+                    ).start()
+
+            stream.close()
+            pa.terminate()
 
         except Exception as e:
             logger.error("唤醒词引擎异常: %s", e, exc_info=True)

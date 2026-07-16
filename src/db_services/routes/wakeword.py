@@ -13,6 +13,8 @@ router = APIRouter()
 
 _KV_THRESHOLD_KEY = "wakeword_threshold"
 _DEFAULT_THRESHOLD = 0.7
+_KV_FRAME_SAMPLES_KEY = "wakeword_frame_samples"
+_DEFAULT_FRAME_SAMPLES = 3200
 
 
 def _init_table():
@@ -71,6 +73,34 @@ def set_threshold(body: dict):
     )
     conn.commit()
     return {"success": True, "threshold": threshold}
+
+
+# ---- 帧大小 ----
+@router.get("/frame-samples")
+def get_frame_samples():
+    """获取帧大小（每次读取的采样数）"""
+    conn = db.get_connection()
+    row = conn.execute("SELECT value FROM kv_store WHERE key = ?", (_KV_FRAME_SAMPLES_KEY,)).fetchone()
+    if not row:
+        return {"frame_samples": _DEFAULT_FRAME_SAMPLES}
+    return {"frame_samples": int(row[0])}
+
+
+@router.put("/frame-samples")
+def set_frame_samples(body: dict):
+    """设置帧大小"""
+    fs = int(body.get("frame_samples", _DEFAULT_FRAME_SAMPLES))
+    fs = max(800, min(64000, fs))
+    conn = db.get_connection()
+    conn.execute(
+        """INSERT INTO kv_store (key, value, namespace, updated_at)
+           VALUES (?, ?, 'wakeword', CURRENT_TIMESTAMP)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value,
+                                          updated_at = CURRENT_TIMESTAMP""",
+        (_KV_FRAME_SAMPLES_KEY, str(fs)),
+    )
+    conn.commit()
+    return {"success": True, "frame_samples": fs}
 
 
 # ---- 记录 ----

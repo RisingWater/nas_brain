@@ -7,6 +7,7 @@ import { CheckOutlined, CloseOutlined, QuestionOutlined, PlayCircleOutlined } fr
 import type { ColumnsType } from 'antd/es/table';
 import {
   getThreshold, setThreshold, listRecords, updateCategory, getAudioUrl,
+  getFrameSamples, setFrameSamples,
 } from '../api/wakeword';
 import type { WakewordRecord } from '../api/wakeword';
 
@@ -25,6 +26,7 @@ const categoryLabels: Record<string, string> = {
 
 export default function WakewordManager() {
   const [threshold, setThresholdVal] = useState(0.7);
+  const [frameSamples, setFrameSamplesVal] = useState(3200);
   const [records, setRecords] = useState<WakewordRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -40,6 +42,15 @@ export default function WakewordManager() {
       setThresholdVal(t);
     } catch {
       message.error('加载阈值失败');
+    }
+  };
+
+  const fetchFrameSamples = async () => {
+    try {
+      const fs = await getFrameSamples();
+      setFrameSamplesVal(fs);
+    } catch {
+      message.error('加载帧大小失败');
     }
   };
 
@@ -60,8 +71,18 @@ export default function WakewordManager() {
     }
   };
 
+  const handleFrameSamplesSave = async () => {
+    try {
+      await setFrameSamples(frameSamples);
+      message.success('帧大小已保存');
+    } catch {
+      message.error('保存失败');
+    }
+  };
+
   useEffect(() => {
     fetchThreshold();
+    fetchFrameSamples();
   }, []);
 
   useEffect(() => {
@@ -189,6 +210,39 @@ export default function WakewordManager() {
         </Col>
         <Col>
           <Button type="primary" onClick={handleThresholdSave}>保存阈值</Button>
+        </Col>
+      </Row>
+
+      {/* 帧大小设置 */}
+      <Row gutter={16} align="middle" style={{ marginBottom: 16 }}>
+        <Col><Text strong>帧大小（采样数）：</Text></Col>
+        <Col flex="300px">
+          <Slider
+            min={800}
+            max={16000}
+            step={100}
+            value={frameSamples}
+            onChange={setFrameSamplesVal}
+            marks={{ 800: '800', 3200: '3200', 8000: '8000', 16000: '16000' }}
+          />
+        </Col>
+        <Col>
+          <InputNumber
+            min={800}
+            max={64000}
+            step={100}
+            value={frameSamples}
+            onChange={(v) => setFrameSamplesVal(v || 3200)}
+            style={{ width: 100 }}
+          />
+        </Col>
+        <Col>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {frameSamples >= 16000 ? '1次/秒' : `${Math.round(16000 / frameSamples)}次/秒`}
+          </Text>
+        </Col>
+        <Col>
+          <Button type="primary" onClick={handleFrameSamplesSave}>保存帧大小</Button>
         </Col>
       </Row>
 

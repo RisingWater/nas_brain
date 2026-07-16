@@ -39,3 +39,12 @@ export async function updateCategory(recordId: number, category: string): Promis
 export function getAudioUrl(recordId: number): string {
   return `/api/admin/wakeword/records/${recordId}/audio`;
 }
+
+export async function getFrameSamples(): Promise<number> {
+  const { data } = await client.get('/admin/wakeword/frame-samples');
+  return data.frame_samples;
+}
+
+export async function setFrameSamples(frame_samples: number): Promise<void> {
+  await client.put('/admin/wakeword/frame-samples', { frame_samples });
+}
