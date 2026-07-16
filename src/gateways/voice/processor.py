@@ -75,45 +75,42 @@ class VoiceProcessor:
         vad_close()
 
     def play_sync(self, text: str):
-        """同步播放语音。合成→播放，播完恢复状态。"""
+        """同步播放语音。保存调用前状态，播完恢复。"""
         prev_state = self.get_state()
         with self._lock:
             self._state = STATE_PLAYING
-
-        # 1. 合成文本为 WAV 音频
-        wav_data = None
         try:
-            url = cfg.get_service_url("playback_services", "/api/speak/synthesize")
-            resp = requests.post(url, json={"text": text, "use_cache": True}, timeout=60)
-            if resp.status_code == 200:
-                wav_data = resp.content
-            else:
-                logger.warning("TTS 合成返回 %s: %s", resp.status_code, resp.text)
+            url = cfg.get_service_url("playback_services", "/api/speak/play")
+            resp = requests.post(url, json={"text": text, "mode": "sync"}, timeout=60)
+            if resp.status_code != 200:
+                logger.warning("TTS 返回 %s: %s", resp.status_code, resp.text)
         except Exception as e:
-            logger.error("TTS 合成失败: %s", e)
+            logger.error("TTS 播放失败: %s", e)
+        finally:
+            with self._lock:
+                self._state = prev_state
 
-        # 2. 本地播放 WAV
-        if wav_data:
-            try:
-                import pyaudio as _pa
-                pa = _pa.PyAudio()
-                stream = pa.open(
-                    format=_pa.paInt16, channels=1, rate=24000,
-                    output=True,
-                )
-                stream.write(wav_data)
-                stream.stop_stream()
-                stream.close()
-                pa.terminate()
-            except Exception as e:
-                logger.error("本地播放失败: %s", e)
-        else:
-            # 无 TTS 时模拟播放时长（短文本约 0.5 秒/字）
-            import time
-            time.sleep(len(text) * 0.15)
-
+    def play_wav(self, wav_data: bytes, sample_rate: int = 24000):
+        """直接播放 WAV 数据（不走 play_sync，避免循环），播完恢复状态。"""
+        prev_state = self.get_state()
         with self._lock:
-            self._state = prev_state
+            self._state = STATE_PLAYING
+        try:
+            import pyaudio as _pa
+            pa = _pa.PyAudio()
+            stream = pa.open(
+                format=_pa.paInt16, channels=1, rate=sample_rate,
+                output=True,
+            )
+            stream.write(wav_data)
+            stream.stop_stream()
+            stream.close()
+            pa.terminate()
+        except Exception as e:
+            logger.error("WAV 播放失败: %s", e)
+        finally:
+            with self._lock:
+                self._state = prev_state
 
     def get_state(self) -> int:
         with self._lock:
