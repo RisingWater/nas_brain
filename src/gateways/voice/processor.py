@@ -348,8 +348,9 @@ class VoiceProcessor:
                     wakeword_id = self._save_wakeword_audio(chunk, 16000, best)
                     buffer.clear()  # 清缓存，避免重复检测
 
-                    # 播"我在呢" → VAD → 声纹 → STT → brain → TTS
+                    # 播"我在呢"（阻塞），等回声消退后开始录音
                     self.play_sync("我在呢")
+                    time.sleep(0.5)  # 等房间回声消退
                     threading.Thread(
                         target=self._voice_pipeline,
                         args=(wakeword_id,),
