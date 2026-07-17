@@ -29,11 +29,15 @@ def _play_via_voice_gateway(wav_data: bytes, sample_rate: int = 24000):
     """将 WAV 音频发到 voice_gateway 播放，同步阻塞到播完"""
     url = cfg.get_service_url("voice_gateway", "/api/voice/play-wav")
     encoded = base64.b64encode(wav_data).decode("ascii")
-    resp = _req.post(url, json={"data": encoded, "sample_rate": sample_rate}, timeout=120)
-    if resp.status_code != 200:
-        logger.warning("voice_gateway 播放返回 %s: %s", resp.status_code, resp.text)
+    try:
+        resp = _req.post(url, json={"data": encoded, "sample_rate": sample_rate}, timeout=120)
+        if resp.status_code != 200:
+            logger.warning("voice_gateway 播放返回 %s: %s", resp.status_code, resp.text)
+            return False
+        return True
+    except _req.exceptions.ConnectionError:
+        logger.error("voice_gateway 不可用，播放失败")
         return False
-    return True
 
 
 @router.post("/synthesize")
