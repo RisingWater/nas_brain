@@ -76,6 +76,7 @@ async def update_user(user_id: str, req: UpdateUserRequest):
         user_id=user_id,
         display_name=req.display_name,
         wechat_name=req.wechat_name,
+        user_type=req.user_type,
         is_temp=req.is_temp
     )
     return {"success": success, "user_id": user_id}

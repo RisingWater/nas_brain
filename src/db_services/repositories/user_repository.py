@@ -144,7 +144,8 @@ class UserRepository:
         ]
     
     def update_user(self, user_id: str, display_name: str = None,
-                    wechat_name: str = None, is_temp: bool = None) -> bool:
+                    wechat_name: str = None, user_type: str = None,
+                    is_temp: bool = None) -> bool:
         fields = []
         values = []
         if display_name is not None:
@@ -153,6 +154,9 @@ class UserRepository:
         if wechat_name is not None:
             fields.append("wechat_name = ?")
             values.append(wechat_name)
+        if user_type is not None:
+            fields.append("user_type = ?")
+            values.append(user_type)
         if is_temp is not None:
             fields.append("is_temp = ?")
             values.append(1 if is_temp else 0)

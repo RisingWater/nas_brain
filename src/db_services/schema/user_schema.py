@@ -13,6 +13,7 @@ class AddUserRequest(BaseModel):
 class UpdateUserRequest(BaseModel):
     display_name: Optional[str] = None
     wechat_name: Optional[str] = None
+    user_type: Optional[str] = None
     is_temp: Optional[bool] = None
 
 
