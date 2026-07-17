@@ -36,6 +36,10 @@ export async function updateCategory(recordId: number, category: string): Promis
   await client.put(`/admin/wakeword/records/${recordId}/category`, { category });
 }
 
+export async function deleteRecord(recordId: number): Promise<void> {
+  await client.delete(`/admin/wakeword/records/${recordId}`);
+}
+
 export function getAudioUrl(recordId: number): string {
   return `/api/admin/wakeword/records/${recordId}/audio`;
 }

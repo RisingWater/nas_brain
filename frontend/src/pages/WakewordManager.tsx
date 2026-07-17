@@ -1,12 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
 import {
   Table, Button, Slider, InputNumber, Typography, Tag, Space, message,
-  Row, Col, Select,
+  Row, Col, Select, Popconfirm,
 } from 'antd';
-import { CheckOutlined, CloseOutlined, QuestionOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { CheckOutlined, CloseOutlined, QuestionOutlined, PlayCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
-  getThreshold, setThreshold, listRecords, updateCategory, getAudioUrl,
+  getThreshold, setThreshold, listRecords, updateCategory, deleteRecord, getAudioUrl,
   getFrameSamples, setFrameSamples, getVadSilence, setVadSilence,
 } from '../api/wakeword';
 import type { WakewordRecord } from '../api/wakeword';
@@ -118,6 +118,16 @@ export default function WakewordManager() {
     }
   };
 
+  const handleDelete = async (record: WakewordRecord) => {
+    try {
+      await deleteRecord(record.id);
+      message.success('已删除');
+      fetchRecords();
+    } catch {
+      message.error('删除失败');
+    }
+  };
+
   const handleCategory = async (record: WakewordRecord, newCat: string) => {
     try {
       await updateCategory(record.id, newCat);
@@ -172,7 +182,7 @@ export default function WakewordManager() {
       ),
     },
     {
-      title: '操作', key: 'action', width: 220,
+      title: '操作', key: 'action', width: 280,
       render: (_, record) => (
         <Space>
           {record.category !== 'positive' && (
@@ -195,6 +205,11 @@ export default function WakewordManager() {
               重置
             </Button>
           )}
+          <Popconfirm title="删除这条记录？" onConfirm={() => handleDelete(record)}>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },

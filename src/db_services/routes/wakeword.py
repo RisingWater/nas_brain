@@ -210,6 +210,23 @@ def get_record_audio(record_id: int):
     return FileResponse(file_path, media_type="audio/wav")
 
 
+@router.delete("/records/{record_id}")
+def delete_record(record_id: int):
+    """删除单条唤醒记录及音频文件"""
+    conn = db.get_connection()
+    row = conn.execute("SELECT file_path FROM wakeword_records WHERE id = ?", (record_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "记录不存在")
+    try:
+        if os.path.exists(row["file_path"]):
+            os.remove(row["file_path"])
+    except Exception:
+        pass
+    conn.execute("DELETE FROM wakeword_records WHERE id = ?", (record_id,))
+    conn.commit()
+    return {"success": True, "id": record_id}
+
+
 @router.delete("/records/old")
 def delete_old_records(before_id: Optional[int] = Query(None)):
     """清理旧记录及其音频文件"""

@@ -371,6 +371,10 @@ async def proxy_wakeword_records(request: Request):
 async def proxy_wakeword_category(record_id: int, request: Request):
     return await _proxy_to_db(f"/api/wakeword/records/{record_id}/category", request)
 
+@app.api_route("/api/admin/wakeword/records/{record_id}", methods=["DELETE"])
+async def proxy_wakeword_record_delete(record_id: int, request: Request):
+    return await _proxy_to_db(f"/api/wakeword/records/{record_id}", request)
+
 @app.api_route("/api/admin/wakeword/records/{record_id}/audio", methods=["GET"])
 async def proxy_wakeword_audio(record_id: int, request: Request):
     return await _proxy_to_db(f"/api/wakeword/records/{record_id}/audio", request)

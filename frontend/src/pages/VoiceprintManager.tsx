@@ -29,14 +29,18 @@ export default function VoiceprintManager() {
   const [detectOpen, setDetectOpen] = useState(false);
   const [detectResult, setDetectResult] = useState<DetectResult | null>(null);
 
+  const TEMP_USER = 'u_temp_voice';
+
   const fetchAll = async () => {
     setLoading(true);
     try {
       const [u, t] = await Promise.all([listUsers(), getThreshold()]);
-      setUsers(u);
+      // 加上未分配用户
+      const allUsers = u.some((x: any) => x.user_id === TEMP_USER) ? u : [...u, { user_id: TEMP_USER, display_name: '未分配' }];
+      setUsers(allUsers);
       setThresholdVal(t);
       const vpMap: Record<string, Voiceprint[]> = {};
-      for (const user of u) {
+      for (const user of allUsers) {
         try {
           vpMap[user.user_id] = await listVoiceprints(user.user_id);
         } catch { vpMap[user.user_id] = []; }
