@@ -66,17 +66,14 @@ async def play(req: PlayRequest):
     if not engine.is_ready:
         raise HTTPException(503, "TTS 引擎未就绪（TTS_URL 未配置）")
 
-    logger.warning("开始tts")
+    logger.warning(f"开始tts: {req.text}")
     result = engine.synthesize_wav(req.text, req.voice, use_cache=True)
     if result is None:
         raise HTTPException(502, "语音合成失败")
 
-    logger.warning("tts完成，开始播放")
     sample_rate = 24000  # Edge TTS 默认 24kHz
     if req.sync:
-        logger.warning("同步播放")
         ok = _play_via_voice_gateway(result["data"], sample_rate)
-        logger.warning("同步播放完成")
         return {
             "code": 200 if ok else 502,
             "data": {"from_cache": result["from_cache"]},

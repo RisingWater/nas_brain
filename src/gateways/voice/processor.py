@@ -76,27 +76,25 @@ class VoiceProcessor:
 
     def play_sync(self, text: str):
         """同步播放语音。保存调用前状态，播完恢复。"""
-        logger.warning("play_sync 开始播放")
+        logger.warning(f"play_sync 开始播放 {text}")
         prev_state = self.get_state()
         with self._lock:
             self._state = STATE_PLAYING
         try:
             logger.warning("play_sync 开始tts")
             url = cfg.get_service_url("playback_services", "/api/speak/play")
-            resp = requests.post(url, json={"text": text, "mode": "sync"}, timeout=60)
+            resp = requests.post(url, json={"text": text, "sync": True}, timeout=60)
             if resp.status_code != 200:
-                logger.warning("TTS 返回 %s: %s", resp.status_code, resp.text)
-            logger.warning("TTS 成功: %s", resp.status_code, resp.text)
+                logger.warning(f"TTS 返回 {resp.status_code}: {resp.text}")
         except Exception as e:
             logger.error("TTS 播放失败: %s", e)
         finally:
-            logger.warning("play_sync 播放结束")
+            logger.warning(f"play_sync 播放结束 {text}")
             with self._lock:
                 self._state = prev_state
 
     def play_wav(self, wav_data: bytes, sample_rate: int = 24000):
         """直接播放 WAV 数据（不走 play_sync，避免循环），播完恢复状态。"""
-        logger.warning("play_wav 开始播放")
         prev_state = self.get_state()
         with self._lock:
             self._state = STATE_PLAYING
@@ -111,7 +109,6 @@ class VoiceProcessor:
             stream.stop_stream()
             stream.close()
             pa.terminate()
-            logger.warning("play_wav 播放成功")
         except Exception as e:
             logger.error("WAV 播放失败: %s", e)
         finally:
