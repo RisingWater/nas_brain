@@ -1,9 +1,9 @@
 """voice_gateway — 语音播放端点（带互斥锁）"""
-import logging
+import asyncio
 import base64
+import logging
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import Response
 
 logger = logging.getLogger("voice_gateway")
 
@@ -33,7 +33,7 @@ async def speak(req: SpeakRequest):
     if not _processor:
         raise HTTPException(503, "语音处理器未就绪")
     try:
-        _processor.play_sync(req.text)
+        await asyncio.to_thread(_processor.play_sync, req.text)
         return {"code": 200, "data": {"text": req.text}, "message": "播放完成"}
     except Exception as e:
         logger.error("播放失败: %s", e)
@@ -47,7 +47,7 @@ async def play_wav(req: PlayWavRequest):
         raise HTTPException(503, "语音处理器未就绪")
     try:
         wav_data = base64.b64decode(req.data)
-        _processor.play_wav(wav_data, req.sample_rate)
+        await asyncio.to_thread(_processor.play_wav, wav_data, req.sample_rate)
         return {"code": 200, "data": {"played": True}, "message": "播放完成"}
     except Exception as e:
         logger.error("WAV 播放失败: %s", e)
