@@ -101,7 +101,7 @@ class ZhixueAPI:
         url = f"{self._base_url}/zhixuebao/report/exam/getUserExamList"
         params = {
             "pageIndex": 1,
-            "pageSize": 10,
+            "pageSize": 5,
             "startSchoolYear": self._start_school_year,
             "endSchoolYear": self._end_school_year,
         }

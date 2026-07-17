@@ -32,7 +32,7 @@ class ExamDetector(BaseDetector):
     def process_loop(self, ctx: DetectorContext):
         try:
             zhixue = self._get_zhixue()
-            exam_list = zhixue.get_exam_list()
+            exam_list = zhixue.get_exam_list()[-5:]
 
             for exam in exam_list:
                 exam_id = exam.get("examId")
