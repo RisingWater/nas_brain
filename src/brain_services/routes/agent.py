@@ -56,6 +56,50 @@ def _send_wechat_file(who: str, file_path: str) -> bool:
     return False
 
 
+def _send_voice_text(text: str, wakeword_id: str = ""):
+    """通过 voice_gateway 播放语音"""
+    if not text or text.strip() == "__SKIP__":
+        logger.info("语音 SKIP，不播放")
+        if wakeword_id:
+            try:
+                _update_wakeword_category(wakeword_id, "negative")
+            except Exception:
+                pass
+        return
+    import requests as _req
+    from src.common.utils import cfg
+    try:
+        url = cfg.get_service_url("voice_gateway", "/api/voice/speak")
+        resp = _req.post(url, json={"text": text}, timeout=120)
+        if resp.status_code == 200:
+            logger.info("语音已播放: %.50s", text)
+            if wakeword_id:
+                try:
+                    _update_wakeword_category(wakeword_id, "positive")
+                except Exception:
+                    pass
+        else:
+            logger.warning("语音播放失败: %s", resp.text)
+    except Exception as e:
+        logger.error("语音播放异常: %s", e)
+
+
+def _update_wakeword_category(wakeword_id: str, category: str):
+    """更新唤醒词分类"""
+    import requests as _req
+    from src.common.utils import cfg
+    url = cfg.get_service_url("db_services", "/api/wakeword/records")
+    resp = _req.get(url, timeout=10)
+    if resp.status_code == 200:
+        items = resp.json().get("items", [])
+        for item in items:
+            if item.get("wakeword_id") == wakeword_id:
+                rid = item["id"]
+                url2 = cfg.get_service_url("db_services", f"/api/wakeword/records/{rid}/category")
+                _req.put(url2, json={"category": category}, timeout=5)
+                break
+
+
 def _process_async(req: AgentRequest):
     """后台处理：策略引擎处理 → 推送回复到 gateway"""
     try:
@@ -70,6 +114,9 @@ def _process_async(req: AgentRequest):
         text = response.data.get("text", "")
         if text and req.protocol == ProtocolType.WECHAT and who:
             _send_wechat_text(who, text)
+        elif text and req.protocol == ProtocolType.VOICE:
+            wakeword_id = (req.metadata or {}).get("wakeword_id", "")
+            _send_voice_text(text, wakeword_id)
 
         # 推送附件文件
         files = response.data.get("files", [])

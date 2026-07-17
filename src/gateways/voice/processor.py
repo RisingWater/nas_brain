@@ -239,7 +239,7 @@ class VoiceProcessor:
             self.set_state(STATE_IDLE)
             return
 
-        # POST brain_services
+        # POST brain_services（异步处理，真实回复会通过 _send_voice_text 推送回来）
         try:
             url = cfg.get_service_url("brain_services", "/api/agent-request")
             req_body = {
@@ -251,20 +251,9 @@ class VoiceProcessor:
                 "content": text,
                 "metadata": {"wakeword_id": wakeword_id, "speaker": speaker},
             }
-            resp = requests.post(url, json=req_body, timeout=120)
-            if resp.status_code == 200:
-                reply = resp.json().get("data", {}).get("text", "")
-                if not reply:
-                    logger.info("brain 返回空回复（可能 __SKIP__）")
-                    self._update_wakeword_category(wakeword_id, "negative")
-                    self.set_state(STATE_IDLE)
-                    return
-
-                # TTS 播放回复
-                self._update_wakeword_category(wakeword_id, "positive")
-                self.play_sync(reply)
-            else:
-                logger.warning("brain_services 返回 %s", resp.status_code)
+            resp = requests.post(url, json=req_body, timeout=10)
+            if resp.status_code != 200:
+                logger.warning("brain_services 返回 %s，非服务故障", resp.status_code)
         except Exception as e:
             logger.error("brain_services 调用失败: %s", e)
 
