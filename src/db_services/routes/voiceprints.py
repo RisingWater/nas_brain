@@ -175,7 +175,7 @@ def move_voiceprint(vp_id: int, target_user_id: str = Query(...)):
     existing = conn.execute("SELECT id FROM voiceprints WHERE id = ?", (vp_id,)).fetchone()
     if not existing:
         raise HTTPException(404, "声纹不存在")
-    conn.execute("UPDATE voiceprints SET user_id = ?, vp_type = 'manual' WHERE id = ?",
+    conn.execute("UPDATE voiceprints SET user_id = ? WHERE id = ?",
                  (target_user_id, vp_id))
     conn.commit()
     return {"success": True, "id": vp_id, "target_user_id": target_user_id}
