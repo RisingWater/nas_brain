@@ -35,8 +35,10 @@ export default function VoiceprintManager() {
     setLoading(true);
     try {
       const [u, t] = await Promise.all([listUsers(), getThreshold()]);
+      // 过滤群聊用户（走微信消息，无声纹）
+      const personUsers = u.filter((x: any) => x.user_type !== 'group');
       // 加上未分配用户
-      const allUsers = u.some((x: any) => x.user_id === TEMP_USER) ? u : [...u, { user_id: TEMP_USER, display_name: '未分配' }];
+      const allUsers = personUsers.some((x: any) => x.user_id === TEMP_USER) ? personUsers : [...personUsers, { user_id: TEMP_USER, display_name: '未分配' }];
       setUsers(allUsers);
       setThresholdVal(t);
       const vpMap: Record<string, Voiceprint[]> = {};
