@@ -48,13 +48,13 @@ _init_table()
 
 def _row_to_dict(row) -> dict:
     return {
-        "user_id": row["user_id"],
-        "strategy": row["strategy"],
-        "system_prompt": row["system_prompt"],
+        "user_id": row["user_id"] or "",
+        "strategy": row["strategy"] or "ignore",
+        "system_prompt": row["system_prompt"] or "",
         "allowed_tools": json.loads(row["allowed_tools"]) if row["allowed_tools"] else None,
         "allowed_processors": json.loads(row["allowed_processors"]) if row["allowed_processors"] else None,
-        "short_term_window": row["short_term_window"],
-        "group_at_only": bool(row["group_at_only"]),
+        "short_term_window": row["short_term_window"] or 30,
+        "group_at_only": bool(row["group_at_only"]) if row["group_at_only"] is not None else True,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
