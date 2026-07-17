@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  Card, Table, Button, Row, Col, Typography, Space, Tag, message,
+  Card, Table, Button, Row, Col, Typography, Space, Tag, message, Switch,
 } from 'antd';
 import { ReloadOutlined, ApiOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { listDetectors, reloadDetectors } from '../api/detectors';
+import { listDetectors, reloadDetectors, enableDetector } from '../api/detectors';
 import type { DetectorInfo } from '../types/detector';
 
 const { Title, Text } = Typography;
@@ -13,6 +13,7 @@ export default function DetectorManager() {
   const [detectors, setDetectors] = useState<DetectorInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [reloading, setReloading] = useState(false);
+  const [operating, setOperating] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -43,6 +44,19 @@ export default function DetectorManager() {
     }
   };
 
+  const handleEnable = async (name: string, enable: boolean) => {
+    setOperating(name);
+    try {
+      await enableDetector(name, enable);
+      message.success(`${enable ? '启用' : '禁用'} ${name}`);
+      await fetchData();
+    } catch {
+      message.error('操作失败');
+    } finally {
+      setOperating(null);
+    }
+  };
+
   const formatInterval = (seconds: number) => {
     if (seconds < 60) return `${seconds}s`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
@@ -50,6 +64,13 @@ export default function DetectorManager() {
   };
 
   const columns: ColumnsType<DetectorInfo> = [
+    {
+      title: '启用', key: 'enable', width: 60, align: 'center',
+      render: (_, r) => (
+        <Switch size="small" checked={r.enable} disabled={operating === r.name}
+          onChange={(v) => handleEnable(r.name, v)} />
+      ),
+    },
     { title: '名称', dataIndex: 'name', key: 'name', width: 120,
       render: (name: string) => <Text code>{name}</Text>,
     },
@@ -62,7 +83,9 @@ export default function DetectorManager() {
     },
     {
       title: '状态', key: 'status', width: 100,
-      render: () => <Tag color="processing">活跃</Tag>,
+      render: (_, r) => r.enable
+        ? <Tag color="processing">活跃</Tag>
+        : <Tag color="default">已禁用</Tag>,
     },
   ];
 

@@ -222,6 +222,10 @@ async def proxy_detectors_reload(request: Request):
 async def proxy_detectors_load(request: Request):
     return await _proxy_to_schedule("/api/detectors/load", request)
 
+@app.api_route("/api/detectors/{name}/enable", methods=["PUT"])
+async def proxy_detectors_enable(name: str, request: Request):
+    return await _proxy_to_schedule(f"/api/detectors/{name}/enable", request)
+
 
 # ---- 代理 /api/processors → brain_services:9031 ----
 # 复用已有的 _proxy_to_brain（定义在 tools 代理上方）

@@ -10,3 +10,7 @@ export async function reloadDetectors(): Promise<DetectorActionResponse> {
   const res = await client.post<DetectorActionResponse>('/detectors/reload');
   return res.data;
 }
+
+export async function enableDetector(name: string, enable: boolean): Promise<void> {
+  await client.put(`/detectors/${name}/enable`, { enable });
+}

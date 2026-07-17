@@ -130,6 +130,13 @@ export default function ChatHistory() {
     let content = msg.content || '';
     let extraInfo = '';
 
+    // 群聊发送者
+    let sender = '';
+    try {
+      const meta = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : (msg.metadata || {});
+      sender = meta.sender || '';
+    } catch {}
+
     if (msg.role === 'tool') {
       extraInfo = `工具: ${msg.tool_name || '?'}`;
       try {
@@ -152,6 +159,7 @@ export default function ChatHistory() {
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
           <Space>
             <Tag color={cfg.color}>{cfg.label}</Tag>
+            {sender && <Text type="secondary" style={{ fontSize: 12 }}>{sender}</Text>}
             {extraInfo && <Text type="secondary" style={{ fontSize: 12 }}>{extraInfo}</Text>}
           </Space>
           <Text type="secondary" style={{ fontSize: 11 }}>{formatTime(msg.created_at)}</Text>

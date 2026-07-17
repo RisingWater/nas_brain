@@ -46,6 +46,7 @@ class BaseDetector:
     interval: int = 60  # 运行间隔（秒）
     last_run: float = 0
     visible: bool = True  # 是否在管理页面显示
+    enable: bool = True  # 是否启用（禁用后不运行）
 
     def __init__(self):
         if not self.name:
@@ -97,6 +98,7 @@ class DetectorRegistry:
                 "name": d.name,
                 "interval": d.interval,
                 "class": d.__class__.__name__,
+                "enable": d.enable,
             }
             for d in self.get_visible()
         ]

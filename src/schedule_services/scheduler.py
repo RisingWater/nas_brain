@@ -35,6 +35,8 @@ class Scheduler:
                 tick_start = time.time()
                 detectors = registry.get_all()
                 for d in detectors:
+                    if not d.enable:
+                        continue
                     if time.time() - d.last_run >= d.interval:
                         logger.debug("执行 detector: %s (interval=%ds)", d.name, d.interval)
                         try:

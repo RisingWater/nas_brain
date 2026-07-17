@@ -2,6 +2,7 @@ export interface DetectorInfo {
   name: string;
   interval: number;
   class: string;
+  enable: boolean;
 }
 
 export interface DetectorListResponse {
