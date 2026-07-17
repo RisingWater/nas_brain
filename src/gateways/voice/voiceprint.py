@@ -68,11 +68,9 @@ class VoiceprintEngine:
                     speaker = "未知用户"
                     logger.info("声纹无匹配，使用临时用户: %s", _TEMP_USER_ID)
 
-                # 注册声纹（临时用户也注册，后续可手动分配）
-                self._enroll_to_db(user_id, vector_list, wav_path)
-
-                # 移动音频到用户目录，返回新路径
+                # 先移动音频到用户目录，再用新路径入库
                 new_path = self._move_audio(wav_path, user_id)
+                self._enroll_to_db(user_id, vector_list, new_path)
                 return user_id, speaker, new_path
 
         except Exception as e:
