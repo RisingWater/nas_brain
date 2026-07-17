@@ -76,10 +76,12 @@ class VoiceProcessor:
 
     def play_sync(self, text: str):
         """同步播放语音。保存调用前状态，播完恢复。"""
+        logger.warning("play_sync 开始播放")
         prev_state = self.get_state()
         with self._lock:
             self._state = STATE_PLAYING
         try:
+            logger.warning("play_sync 开始tts")
             url = cfg.get_service_url("playback_services", "/api/speak/play")
             resp = requests.post(url, json={"text": text, "mode": "sync"}, timeout=60)
             if resp.status_code != 200:
@@ -88,6 +90,7 @@ class VoiceProcessor:
         except Exception as e:
             logger.error("TTS 播放失败: %s", e)
         finally:
+            logger.warning("play_sync 播放结束")
             with self._lock:
                 self._state = prev_state
 
@@ -104,7 +107,6 @@ class VoiceProcessor:
                 format=_pa.paInt16, channels=1, rate=sample_rate,
                 output=True,
             )
-           
             stream.write(wav_data)
             stream.stop_stream()
             stream.close()
