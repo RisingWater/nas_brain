@@ -150,6 +150,7 @@ export default function VoiceprintManager() {
                   </Space>
                 }
               >
+                <div style={{ maxHeight: 320, overflowY: 'auto' }}>
                 {(vpsByUser[user.user_id] || []).map((vp) => (
                   <div
                     key={vp.id}
@@ -177,6 +178,7 @@ export default function VoiceprintManager() {
                     </div>
                   </div>
                 ))}
+                </div>
                 {(vpsByUser[user.user_id] || []).length === 0 && (
                   <Text type="secondary" style={{ fontSize: 12 }}>暂无声纹</Text>
                 )}

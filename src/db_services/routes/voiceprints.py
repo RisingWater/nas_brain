@@ -170,15 +170,39 @@ def get_voiceprint(vp_id: int):
 # ---- 移动 ----
 @router.put("/{vp_id}/move")
 def move_voiceprint(vp_id: int, target_user_id: str = Query(...)):
-    """移动声纹到另一个用户"""
+    """移动声纹到另一个用户（同时搬音频文件）"""
     conn = db.get_connection()
-    existing = conn.execute("SELECT id FROM voiceprints WHERE id = ?", (vp_id,)).fetchone()
-    if not existing:
+    row = conn.execute("SELECT id, audio_path FROM voiceprints WHERE id = ?", (vp_id,)).fetchone()
+    if not row:
         raise HTTPException(404, "声纹不存在")
-    conn.execute("UPDATE voiceprints SET user_id = ? WHERE id = ?",
-                 (target_user_id, vp_id))
+
+    new_audio_path = row["audio_path"]
+    old_path = row["audio_path"]
+    if old_path and os.path.exists(old_path):
+        # 确定目标目录
+        if old_path.startswith(_VOICEPRINT_DIR):
+            target_dir = os.path.join(_VOICEPRINT_DIR, target_user_id)
+        else:
+            # data/recordings/{user_id}/xxx.wav → data/recordings/{target_user_id}/xxx.wav
+            record_dir = os.getenv("RECORD_DIR", "data/recordings")
+            target_dir = os.path.join(record_dir, target_user_id)
+
+        os.makedirs(target_dir, exist_ok=True)
+        fname = os.path.basename(old_path)
+        dst = os.path.join(target_dir, fname)
+
+        if os.path.normpath(os.path.dirname(old_path)) != os.path.normpath(target_dir):
+            shutil.move(old_path, dst)
+            # 存相对路径
+            rel = os.path.relpath(dst, os.path.dirname(os.getenv("RECORD_DIR", "data/recordings")))
+            new_audio_path = rel.replace(os.sep, "/")
+            import logging
+            logging.getLogger("voiceprints").info("移动音频: %s -> %s", old_path, new_audio_path)
+
+    conn.execute("UPDATE voiceprints SET user_id = ?, audio_path = ? WHERE id = ?",
+                 (target_user_id, new_audio_path, vp_id))
     conn.commit()
-    return {"success": True, "id": vp_id, "target_user_id": target_user_id}
+    return {"success": True, "id": vp_id, "target_user_id": target_user_id, "audio_path": new_audio_path}
 
 
 # ---- 删除 ----
