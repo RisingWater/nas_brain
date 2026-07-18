@@ -37,6 +37,22 @@ def _init_table():
 
 _init_table()
 
+# 确保 u_temp_voice 用户在 users 表和 user_configs 表存在
+def _ensure_temp_user():
+    conn = db.get_connection()
+    conn.execute(
+        """INSERT OR IGNORE INTO users (user_id, display_name, user_type, is_temp, is_active)
+           VALUES ('u_temp_voice', '未分配声纹', 'person', 1, 1)"""
+    )
+    conn.execute(
+        """INSERT OR IGNORE INTO user_configs (user_id, strategy)
+           VALUES ('u_temp_voice', 'smart')"""
+    )
+    conn.commit()
+
+
+_ensure_temp_user()
+
 
 def _row_to_dict(row) -> dict:
     return {
