@@ -50,10 +50,10 @@ class RunPythonTool(BaseTool):
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(code)
 
-            # 执行
+            # 执行（cwd=_TEMP_DIR，所以只传文件名）
             logger.info("执行 Python 脚本: %s", script_path)
             result = subprocess.run(
-                [sys.executable, script_path],
+                [sys.executable, os.path.basename(script_path)],
                 capture_output=True, text=True, timeout=timeout,
                 cwd=_TEMP_DIR,  # 工作目录设为 TEMP_DIR
                 env={**os.environ, "PYTHONIOENCODING": "utf-8"},

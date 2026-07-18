@@ -40,6 +40,13 @@ class LLMContextBuilder:
             system_prompt = _DEFAULT_SYSTEM_PROMPT
         messages.append({"role": "system", "content": system_prompt})
 
+        # 当前日期
+        from datetime import datetime
+        weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+        now = datetime.now()
+        date_str = now.strftime(f"%Y年%m月%d日 {weekdays[now.weekday()]}")
+        messages.append({"role": "system", "content": f"今天是 {date_str}。"})
+
         # 1b. 来源上下文
         ctx_parts = []
         if protocol == "wechat":
