@@ -196,6 +196,7 @@ def handle(self, req, ctx) -> dict | None:
 - `wakeword_records` 表存储唤醒历史，支持 positive/negative 分类
 - 阈值通过 `kv_store` 存取
 - 前端支持拖拽分配声纹到用户
+- `u_temp_voice`（未匹配声纹的临时用户）在 db_services 启动时自动创建到 users 表和 user_configs 表
 
 ## 服务发现（SINGLETON 模式）
 
