@@ -12,6 +12,7 @@ from fastapi import APIRouter, BackgroundTasks
 from ..schema.brain_schema import AgentResponse
 from src.common.schemas.agent_request import AgentRequest, ProtocolType
 from ..strategy import strategy_engine
+from ..stats import stats
 
 logger = logging.getLogger("brain_services")
 
@@ -108,6 +109,10 @@ def _process_async(req: AgentRequest):
         if not response.data:
             return
 
+        # 统计：有 text 回复且非 SKIP 算一次有效回答
+        text = (response.data or {}).get("text", "")
+        stats.record_request(answered=bool(text and text.strip() != "__SKIP__"))
+
         who = req.metadata.get("wechat_name", "")
 
         # 推送文本回复
@@ -147,3 +152,9 @@ async def receive_request(req: AgentRequest):
         "text": "收到",
         "received": True,
     })
+
+
+@router.get("/stats")
+def get_stats():
+    """返回统计信息"""
+    return stats.get_stats()

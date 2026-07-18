@@ -7,7 +7,7 @@ from src.common.utils import log_manager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from .routes import users, logs
+from .routes import users, logs, dashboard
 
 app = FastAPI(title="管理后端微服务", version="1.0.0")
 
@@ -23,6 +23,7 @@ app.add_middleware(
 # API 路由
 app.include_router(users.router, prefix="/api/admin/users", tags=["用户管理"])
 app.include_router(logs.router, prefix="/api/logs", tags=["日志查看"])
+app.include_router(dashboard.router, prefix="/api/admin", tags=["监控面板"])
 
 
 @app.get("/health")
@@ -289,6 +290,11 @@ async def proxy_chat_messages_single(msg_id: int, request: Request):
 @app.api_route("/api/admin/chat-messages/{user_id}/last", methods=["DELETE"])
 async def proxy_chat_messages_last(user_id: str, request: Request):
     return await _proxy_to_db(f"/api/chat-messages/{user_id}/last", request)
+
+
+@app.api_route("/api/admin/chat-messages/active-users", methods=["GET"])
+async def proxy_chat_messages_active_users(request: Request):
+    return await _proxy_to_db("/api/chat-messages/active-users", request)
 
 
 @app.api_route("/api/admin/chat-messages/{user_id}", methods=["GET", "DELETE"])

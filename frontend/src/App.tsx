@@ -12,12 +12,15 @@ import ChatHistory from './pages/ChatHistory';
 import MemoryManager from './pages/MemoryManager';
 import WakewordManager from './pages/WakewordManager';
 import VoiceprintManager from './pages/VoiceprintManager';
+import Dashboard from './pages/Dashboard';
+import BackupManager from './pages/BackupManager';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<AdminLayout />}>
+          <Route path="/" element={<Dashboard />} />
           <Route path="/users" element={<UserList />} />
           <Route path="/services" element={<ServiceManager />} />
           <Route path="/logs" element={<LogViewer />} />
@@ -30,7 +33,7 @@ export default function App() {
           <Route path="/memory" element={<MemoryManager />} />
           <Route path="/wakeword" element={<WakewordManager />} />
           <Route path="/voiceprints" element={<VoiceprintManager />} />
-          <Route path="/" element={<Navigate to="/users" replace />} />
+          <Route path="/backup" element={<BackupManager />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -20,12 +20,15 @@ import {
   BellOutlined,
   AppstoreOutlined,
   FolderOutlined,
+  BarChartOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
 const { Header, Sider, Content } = Layout;
 
 const menuItems = [
+  { key: '/', icon: <BarChartOutlined />, label: '监控面板' },
   {
     key: 'brain', icon: <RobotOutlined />, label: '智能引擎',
     children: [
@@ -61,6 +64,7 @@ const menuItems = [
     children: [
       { key: '/services', icon: <CloudServerOutlined />, label: '服务管理' },
       { key: '/logs', icon: <FileTextOutlined />, label: '日志查看' },
+      { key: '/backup', icon: <DownloadOutlined />, label: '数据备份' },
     ],
   },
 ];

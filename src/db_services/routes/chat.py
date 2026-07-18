@@ -199,6 +199,21 @@ def delete_last_messages(user_id: str, count: int = Query(1, ge=1, le=20)):
     return {"success": True, "user_id": user_id, "deleted_ids": []}
 
 
+@router.get("/active-users")
+def get_active_users(minutes_5: int = 5, minutes_60: int = 60, minutes_1440: int = 1440):
+    """获取活跃用户数（过去 N 分钟内有消息的用户）"""
+    conn = db.get_connection()
+    result = {}
+    for label, mins in [("5min", minutes_5), ("1hour", minutes_60), ("1day", minutes_1440)]:
+        row = conn.execute(
+            """SELECT COUNT(DISTINCT user_id) as cnt FROM chat_messages
+               WHERE created_at >= datetime('now', ?)""",
+            (f"-{mins} minutes",),
+        ).fetchone()
+        result[label] = row["cnt"]
+    return result
+
+
 @router.delete("/{user_id}")
 def delete_chat_messages(user_id: str, before_id: Optional[int] = Query(None)):
     """清理旧聊天记录"""

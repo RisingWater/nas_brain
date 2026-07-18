@@ -5,6 +5,7 @@ import logging
 from src.common.clients.deepseek import DeepSeekAPI
 from ..tools import registry as tool_registry
 from .chat_recorder import ChatRecorder
+from ..stats import stats
 
 logger = logging.getLogger("brain_services.strategy.llm_handler")
 
@@ -38,6 +39,11 @@ class LLMHandler:
                 logger.info("LLM REQ: %s",
                     json.dumps({"messages": messages, "tools": tools}, ensure_ascii=False, default=str))
             response = self.deepseek.chat_with_tools(messages, tools=tools)
+            # 记录 token 用量
+            usage = self.deepseek.last_usage
+            if usage:
+                stats.record_tokens(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+
             if not response:
                 return "（LLM 响应失败）", all_files
 

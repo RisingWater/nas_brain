@@ -16,6 +16,7 @@ class DeepSeekAPI:
         self._api_key = os.getenv("DEEPSEEK_API_KEY", "")
         if not self._api_key:
             logger.warning("DEEPSEEK_API_KEY 未设置")
+        self.last_usage = {}  # 最近一次调用的 token 用量
 
     def _headers(self) -> dict:
         return {
@@ -67,7 +68,9 @@ class DeepSeekAPI:
                 timeout=kwargs.get("timeout", 60),
             )
             if resp.status_code == 200:
-                return resp.json()
+                data = resp.json()
+                self.last_usage = data.get("usage", {})
+                return data
             logger.error("DeepSeek API 错误: %s - %s", resp.status_code, resp.text)
         except Exception as e:
             logger.error("DeepSeek API 调用失败: %s", e)
