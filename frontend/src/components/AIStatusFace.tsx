@@ -9,18 +9,10 @@ interface AIStatusFaceProps {
 
 const STATE_COLORS: Record<AIFaceState, string> = {
   idle: '#7ec8e3',       // 青蓝
-  listening: '#ffaa00',  // 橙黄 — 警觉
-  thinking: '#ffdd44',   // 亮黄 — 思考
-  operating: '#ff9933',  // 橙 — 操作中
-  speaking: '#44dd66',   // 绿 — 说话
-};
-
-const STATE_LABELS: Record<AIFaceState, string> = {
-  idle: '空闲中',
-  listening: '正在聆听...',
-  thinking: '思考中...',
-  operating: '操作中...',
-  speaking: '说话中...',
+  listening: '#4fc3f7',  // 亮蓝 — 专注聆听
+  thinking: '#ffb74d',   // 橙黄 — 思考
+  operating: '#ff8a65',   // 珊瑚橙 — 操作
+  speaking: '#81c784',   // 浅绿 — 说话
 };
 
 export default function AIStatusFace({ state, size = 300 }: AIStatusFaceProps) {
@@ -30,40 +22,39 @@ export default function AIStatusFace({ state, size = 300 }: AIStatusFaceProps) {
   const [talkPhase, setTalkPhase] = useState(0);
   const blinkTimer = useRef<ReturnType<typeof setTimeout>>();
   const talkTimer = useRef<ReturnType<typeof setInterval>>();
-  const colorTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // State transition color animation
   useEffect(() => {
     if (prevState !== state) {
       setPrevState(state);
-      // Smooth color transition via CSS transition
       setTimeout(() => setAnimColor(STATE_COLORS[state]), 10);
     } else {
       setAnimColor(STATE_COLORS[state]);
     }
   }, [state, prevState]);
 
-  // Blinking
+  // Blinking — slow blink for idle, faster for others, no blink for listening
   useEffect(() => {
+    const delay = state === 'idle' ? 3000 + Math.random() * 3000 : 4000 + Math.random() * 4000;
     const scheduleBlink = () => {
       blinkTimer.current = setTimeout(() => {
         setBlink(true);
         setTimeout(() => {
           setBlink(false);
           scheduleBlink();
-        }, 120);
-      }, 2000 + Math.random() * 3000);
+        }, state === 'idle' ? 150 : 100);
+      }, delay);
     };
     scheduleBlink();
     return () => { if (blinkTimer.current) clearTimeout(blinkTimer.current); };
-  }, []);
+  }, [state]);
 
   // Talking mouth animation
   useEffect(() => {
     if (state === 'speaking') {
       talkTimer.current = setInterval(() => {
-        setTalkPhase(prev => (prev + 1) % 4);
-      }, 180);
+        setTalkPhase(prev => (prev + 1) % 5);
+      }, 140);
     } else {
       setTalkPhase(0);
       if (talkTimer.current) clearInterval(talkTimer.current);
@@ -74,66 +65,90 @@ export default function AIStatusFace({ state, size = 300 }: AIStatusFaceProps) {
   const color = animColor;
   const glowId = 'ai-face-glow';
 
-  // Eye shape per state
+  // ----- 眼睛 -----
   const eye = (side: 'left' | 'right') => {
-    if (blink) return { ry: 1, h: 2, y: 40, rx: 7 };
+    if (blink) return { x: side === 'left' ? 26 : 60, y: 39, w: 14, h: 2, rx: 1 };
 
     switch (state) {
       case 'listening':
-        return { ry: 16, h: 32, y: 34, rx: 7 }; // Wide alert eyes
+        // 专注：大而圆的杏眼，略向内倾
+        return { x: side === 'left' ? 24 : 58, y: 32, w: 18, h: 26, rx: 9 };
       case 'thinking':
-        if (side === 'left') return { ry: 3, h: 6, y: 40, rx: 7 }; // Squinting
-        return { ry: 12, h: 24, y: 38, rx: 7 };
+        // 思考：眯眼上翻 — 窄而高
+        return { x: side === 'left' ? 27 : 61, y: 33, w: 12, h: 12, rx: 6 };
       case 'operating':
-        if (side === 'left') return { ry: 10, h: 20, y: 38, rx: 7 };
-        return { ry: 4, h: 8, y: 40, rx: 7 }; // Mismatched
+        // 操作：锐利专注 — 方形眼略带角度
+        return { x: side === 'left' ? 25 : 59, y: 36, w: 16, h: 14, rx: 3 };
       case 'speaking':
-        return { ry: 10, h: 20, y: 36, rx: 7 }; // Happy arches
+        // 说话：弯月眼
+        return { x: side === 'left' ? 25 : 59, y: 36, w: 16, h: 18, rx: 8 };
       default: // idle
-        return { ry: 10, h: 20, y: 38, rx: 7 };
+        return { x: side === 'left' ? 26 : 60, y: 37, w: 14, h: 18, rx: 7 };
     }
   };
 
-  // Eyebrow per state
+  // ----- 眉毛 -----
   const brow = (side: 'left' | 'right') => {
-    const bY = 20;
+    const baseY = 20;
     switch (state) {
       case 'listening':
-        return { y: bY - 10, rotate: 0 }; // Raised
+        // 微抬，略呈八字（温和关注）
+        return { y: baseY - 6, rotate: side === 'left' ? 5 : -5 };
       case 'thinking':
-        if (side === 'left') return { y: bY, rotate: 0 };
-        return { y: bY - 5, rotate: 15 }; // One raised
+        // 紧锁 — 都向下内侧倾斜
+        return { y: baseY + 4, rotate: side === 'left' ? 15 : -15 };
       case 'operating':
-        if (side === 'left') return { y: bY - 5, rotate: -15 };
-        return { y: bY + 3, rotate: 15 }; // Conflicted
+        // 用力集中 — 明显下压
+        return { y: baseY + 6, rotate: side === 'left' ? 18 : -18 };
       case 'speaking':
-        return { y: bY - 5, rotate: side === 'left' ? -8 : 8 };
+        // 舒展微扬
+        return { y: baseY - 4, rotate: side === 'left' ? -5 : 5 };
       default:
-        return { y: bY, rotate: 0 };
+        return { y: baseY, rotate: 0 };
     }
   };
 
-  // Mouth per state
+  // ----- 嘴巴 -----
   const mouth = () => {
     switch (state) {
       case 'listening':
-        return <ellipse cx="50" cy="80" rx="5" ry="6" fill="none" stroke={color} strokeWidth="3" />; // Small O
+        // 微张，像在认真听
+        return <ellipse cx="50" cy="82" rx="6" ry="5" fill="none" stroke={color} strokeWidth="3" />;
+      case 'thinking': {
+        // 歪嘴 — 不对称
+        return (
+          <path
+            d="M 36,82 Q 50,78 62,84"
+            stroke={color} strokeWidth="3" fill="none" strokeLinecap="round"
+          />
+        );
+      }
+      case 'operating':
+        // 紧抿 — 用力的一条线
+        return (
+          <path
+            d="M 38,82 L 62,82"
+            stroke={color} strokeWidth="3.5" fill="none" strokeLinecap="round"
+          />
+        );
       case 'speaking': {
-        // Talking mouth: oscillate between smile and open
-        const open = [1, 0.3, 0.7, 0.5][talkPhase];
+        // 说话动画：开合
+        const opens = [6, 9, 4, 7, 5];
+        const ry = opens[talkPhase % opens.length];
         return (
           <ellipse
-            cx="50" cy="80" rx="8" ry={4 + open * 4}
+            cx="50" cy="82" rx="8" ry={ry}
             fill="none" stroke={color} strokeWidth="3"
           />
         );
       }
-      case 'thinking':
-        return <path d="M 38,80 L 62,80" stroke={color} strokeWidth="3" strokeLinecap="round" />;
-      case 'operating':
-        return <path d="M 38,82 Q 50,76 62,83" stroke={color} strokeWidth="3" strokeLinecap="round" />; // Quirky
       default: // idle
-        return <path d="M 35,78 L 65,78" stroke={color} strokeWidth="3" strokeLinecap="round" />;
+        return (
+          <path
+            d="M 35,80 L 65,80"
+            stroke={color} strokeWidth="3" fill="none" strokeLinecap="round"
+          />
+        );
     }
   };
 
@@ -149,7 +164,7 @@ export default function AIStatusFace({ state, size = 300 }: AIStatusFaceProps) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      filter: `drop-shadow(0 0 18px ${color}40)`,
+      filter: `drop-shadow(0 0 20px ${color}50)`,
       transition: 'filter 0.6s ease',
     }}>
       <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: 'block' }}>
@@ -163,46 +178,44 @@ export default function AIStatusFace({ state, size = 300 }: AIStatusFaceProps) {
           </filter>
         </defs>
 
-        {/* Left eyebrow */}
+        {/* 左眉 */}
         <rect
-          x="24" y={lBrow.y} width="18" height="3" rx="1.5"
+          x="23" y={lBrow.y} width="18" height="3" rx="1.5"
           fill={color}
-          transform={`rotate(${lBrow.rotate}, 33, ${lBrow.y})`}
-          style={{ transition: 'all 0.4s ease' }}
+          transform={`rotate(${lBrow.rotate}, 32, ${lBrow.y})`}
+          style={{ transition: 'all 0.35s ease' }}
         />
-        {/* Right eyebrow */}
+        {/* 右眉 */}
         <rect
-          x="58" y={rBrow.y} width="18" height="3" rx="1.5"
+          x="59" y={rBrow.y} width="18" height="3" rx="1.5"
           fill={color}
-          transform={`rotate(${rBrow.rotate}, 67, ${rBrow.y})`}
-          style={{ transition: 'all 0.4s ease' }}
+          transform={`rotate(${rBrow.rotate}, 68, ${rBrow.y})`}
+          style={{ transition: 'all 0.35s ease' }}
         />
 
-        {/* Left eye */}
+        {/* 左眼 */}
         <rect
-          x={26} y={lEye.y - lEye.h / 2}
-          width="14" height={lEye.h} rx={lEye.rx}
+          x={lEye.x} y={lEye.y} width={lEye.w} height={lEye.h} rx={lEye.rx}
           fill={color}
           style={{ transition: 'all 0.2s ease' }}
         />
-        {/* Right eye */}
+        {/* 右眼 */}
         <rect
-          x={60} y={rEye.y - rEye.h / 2}
-          width="14" height={rEye.h} rx={rEye.rx}
+          x={rEye.x} y={rEye.y} width={rEye.w} height={rEye.h} rx={rEye.rx}
           fill={color}
           style={{ transition: 'all 0.2s ease' }}
         />
 
-        {/* Mouth */}
+        {/* 嘴 */}
         <g style={{ transition: 'all 0.3s ease' }} filter={`url(#${glowId})`}>
           {mouth()}
         </g>
 
-        {/* Scanline overlay */}
-        <pattern id="ai-scan" x="0" y="0" width="100" height="2" patternUnits="userSpaceOnUse">
+        {/* 扫描线 */}
+        <pattern id="ai-scan2" x="0" y="0" width="100" height="2" patternUnits="userSpaceOnUse">
           <rect x="0" y="0" width="100" height="1" fill="black" opacity={0.06} />
         </pattern>
-        <rect x="0" y="0" width="100" height="100" fill="url(#ai-scan)" style={{ mixBlendMode: 'overlay' }} />
+        <rect x="0" y="0" width="100" height="100" fill="url(#ai-scan2)" style={{ mixBlendMode: 'overlay' }} />
       </svg>
     </div>
   );
