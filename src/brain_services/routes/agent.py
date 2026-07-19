@@ -120,7 +120,12 @@ def _process_async(req: AgentRequest):
         stats.record_request(answered=not is_skip)
 
         if not is_skip:
-            trace_event(req.request_id, "brain_done", protocol=req.protocol.value, user_id=req.user_id)
+            token_meta = {
+                "prompt_tokens": req.metadata.get("prompt_tokens", 0),
+                "completion_tokens": req.metadata.get("completion_tokens", 0),
+            }
+            trace_event(req.request_id, "brain_done", protocol=req.protocol.value,
+                        user_id=req.user_id, metadata=token_meta)
             if text:
                 _trace_reply(req.request_id, reply=text)
         else:

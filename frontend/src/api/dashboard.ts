@@ -27,6 +27,9 @@ export interface DashboardStats {
     total: number;
     answered: number;
     avg_ms: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
   }[];
 }
 

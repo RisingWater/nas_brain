@@ -200,20 +200,29 @@ def get_daily_stats():
     items = []
     for r in rows:
         stages = json.loads(r["stages"]) if r["stages"] else {}
-        meta_list = [json.loads(m) if isinstance(m, str) else m for m in r["metadata"]] if False else []
+        metadata = json.loads(r["metadata"]) if r["metadata"] else {}
+
         timestamps = [v for v in stages.values() if isinstance(v, (int, float))]
         avg_ms = 0
         if len(timestamps) >= 2:
-            durs = [max(timestamps) - min(timestamps)]
-            avg_ms = round(sum(durs) / len(durs), 1) if durs else 0
+            avg_ms = round(max(timestamps) - min(timestamps), 1)
 
-        # Token 估算（从 metadata 无法直接拿到，用 brain 累计值差异推算的话太复杂）
-        # 简单返回每日的请求数、回答数、平均耗时
+        # 从 metadata 提取 token 用量（非 SKIP 的 brain_done 事件中记录）
+        pt = metadata.get("prompt_tokens", 0) if isinstance(metadata, dict) else 0
+        ct = metadata.get("completion_tokens", 0) if isinstance(metadata, dict) else 0
+        # fallback: 可能 metadata 是 list 或旧格式
+        if isinstance(metadata, list):
+            pt = sum(m.get("prompt_tokens", 0) for m in metadata)
+            ct = sum(m.get("completion_tokens", 0) for m in metadata)
+
         items.append({
             "date": r["day"],
             "total": r["total"],
             "answered": r["answered"],
             "avg_ms": avg_ms,
+            "prompt_tokens": pt,
+            "completion_tokens": ct,
+            "total_tokens": pt + ct,
         })
 
     return {"items": items}

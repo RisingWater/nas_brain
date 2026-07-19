@@ -23,15 +23,17 @@ class LLMHandler:
         self.recorder = ChatRecorder()
 
     def handle(self, user_id: str, messages: list[dict],
-               tools: list[dict], request_id: str = "") -> tuple[str, list[str]]:
+               tools: list[dict], request_id: str = "") -> tuple[str, list[str], dict]:
         """函数调用循环：LLM → 工具 → LLM → ... → 最终回复
 
         Returns:
-            (最终回复文本, 附件文件路径列表)
+            (最终回复文本, 附件文件路径列表, {prompt_tokens, completion_tokens})
         """
         iteration = 0
         all_files = []
         is_first_llm = True
+        req_prompt = 0
+        req_completion = 0
 
         while iteration < self.MAX_ITERATIONS:
             iteration += 1
@@ -44,10 +46,14 @@ class LLMHandler:
             # 记录 token 用量
             usage = self.deepseek.last_usage
             if usage:
-                stats.record_tokens(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+                pt = usage.get("prompt_tokens", 0)
+                ct = usage.get("completion_tokens", 0)
+                stats.record_tokens(pt, ct)
+                req_prompt += pt
+                req_completion += ct
 
             if not response:
-                return "（LLM 响应失败）", all_files
+                return "（LLM 响应失败）", all_files, {"prompt_tokens": req_prompt, "completion_tokens": req_completion}
 
             # 追踪：第一轮 LLM 思考完成
             if is_first_llm:
@@ -62,7 +68,7 @@ class LLMHandler:
                 # 没有工具调用 → 最终回复
                 if content.strip() != "__SKIP__":
                     self.recorder.record_assistant(user_id, content, tool_calls=None)
-                return content, all_files
+                return content, all_files, {"prompt_tokens": req_prompt, "completion_tokens": req_completion}
 
             # 有工具调用 → 记录 assistant 消息
             self.recorder.record_assistant(user_id, content, tool_calls=tool_calls)
@@ -144,10 +150,10 @@ class LLMHandler:
                 # 清理上下文中孤立的 tool_calls（final 工具不会添加 tool response）
                 # 避免下次构建上下文时 DeepSeek 报错
                 self._cleanup_orphan_tool_calls(messages)
-                return final_text, all_files
+                return final_text, all_files, {"prompt_tokens": req_prompt, "completion_tokens": req_completion}
 
         logger.warning("LLM 工具调用达到最大迭代次数 %d", self.MAX_ITERATIONS)
-        return "（工具调用次数过多，请简化问题）", all_files
+        return "（工具调用次数过多，请简化问题）", all_files, {"prompt_tokens": req_prompt, "completion_tokens": req_completion}
 
     @staticmethod
     def _cleanup_orphan_tool_calls(messages: list[dict]):

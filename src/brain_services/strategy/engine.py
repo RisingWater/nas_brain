@@ -140,12 +140,15 @@ class StrategyEngine:
         )
 
         # 执行 LLM 循环
-        reply, files = self.llm_handler.handle(
+        reply, files, req_tokens = self.llm_handler.handle(
             user_id=req.user_id,
             messages=messages,
             tools=filtered_tools,
             request_id=req.request_id,
         )
+        # 记录本次请求的 token 用量到 metadata
+        req.metadata["prompt_tokens"] = req_tokens.get("prompt_tokens", 0)
+        req.metadata["completion_tokens"] = req_tokens.get("completion_tokens", 0)
 
         # __SKIP__：不回复，按 user_msg_id 删除该条消息
         if reply and reply.strip() == "__SKIP__":
