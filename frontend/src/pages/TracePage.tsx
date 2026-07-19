@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Table, Tag, Typography, Card, Descriptions, Spin, Button, Space, Divider, Progress } from 'antd';
-import { ArrowLeftOutlined, ClockCircleOutlined } from '@ant-design/icons';
-import { listTraces, getTrace } from '../api/traces';
+import { Table, Tag, Typography, Card, Descriptions, Spin, Button, Space, Divider, Progress, Modal, message } from 'antd';
+import { ArrowLeftOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { listTraces, getTrace, deleteTrace } from '../api/traces';
 import type { TraceItem } from '../api/traces';
 
 const { Text, Title } = Typography;
@@ -48,7 +48,7 @@ function calcDuration(stages: Record<string, number>, startKey: string, endKey: 
   return null;
 }
 
-function TraceDetail({ requestId, onBack }: { requestId: string; onBack: () => void }) {
+function TraceDetail({ requestId, onBack, onDelete }: { requestId: string; onBack: () => void; onDelete: (id: string) => void }) {
   const [trace, setTrace] = useState<TraceItem | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -94,6 +94,7 @@ function TraceDetail({ requestId, onBack }: { requestId: string; onBack: () => v
     <div>
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={onBack}>返回列表</Button>
+        <Button icon={<DeleteOutlined />} danger onClick={() => onDelete(trace.request_id)}>删除</Button>
       </Space>
 
       <Card size="small" style={{ marginBottom: 16 }}>
@@ -186,10 +187,29 @@ export default function TracePage() {
     }
   };
 
+  const handleDelete = (requestId: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: '删除后不可恢复，确定要删除这条追踪记录吗？',
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deleteTrace(requestId);
+          message.success('已删除');
+          fetchList(page);
+        } catch {
+          message.error('删除失败');
+        }
+      },
+    });
+  };
+
   useEffect(() => { fetchList(page); }, [page]);
 
   if (detailId) {
-    return <TraceDetail requestId={detailId} onBack={() => setDetailId(null)} />;
+    return <TraceDetail requestId={detailId} onBack={() => setDetailId(null)} onDelete={handleDelete} />;
   }
 
   // 阶段耗时对（用于列表中的摘要和详情计算）
@@ -250,9 +270,12 @@ export default function TracePage() {
       render: (v: string) => v.replace('T', ' ').slice(0, 19),
     },
     {
-      title: '操作', key: 'actions', width: 60,
+      title: '操作', key: 'actions', width: 100,
       render: (_: any, r: TraceItem) => (
-        <Button type="link" size="small" onClick={() => setDetailId(r.request_id)}>详情</Button>
+        <Space size={0}>
+          <Button type="link" size="small" onClick={() => setDetailId(r.request_id)}>详情</Button>
+          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r.request_id)} />
+        </Space>
       ),
     },
   ];

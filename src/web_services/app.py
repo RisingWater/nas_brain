@@ -419,7 +419,7 @@ async def proxy_trace_reply(request_id: str, request: Request):
 async def proxy_trace_list(request: Request):
     return await _proxy_to_db("/api/request-traces", request)
 
-@app.api_route("/api/admin/request-traces/{request_id}", methods=["GET"])
+@app.api_route("/api/admin/request-traces/{request_id}", methods=["GET", "DELETE"])
 async def proxy_trace_detail(request_id: str, request: Request):
     return await _proxy_to_db(f"/api/request-traces/{request_id}", request)
 

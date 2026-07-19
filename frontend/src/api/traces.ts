@@ -40,3 +40,7 @@ export async function getTrace(requestId: string): Promise<TraceItem> {
   const res = await client.get(`/admin/request-traces/${requestId}`);
   return res.data;
 }
+
+export async function deleteTrace(requestId: string): Promise<void> {
+  await client.delete(`/admin/request-traces/${requestId}`);
+}

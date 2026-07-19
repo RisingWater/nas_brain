@@ -259,6 +259,15 @@ def list_traces(
     return {"total": total, "items": [_row_to_dict(r) for r in rows]}
 
 
+@router.delete("/{request_id}")
+def delete_trace(request_id: str):
+    """删除单条追踪记录"""
+    conn = db.get_connection()
+    conn.execute("DELETE FROM request_traces WHERE request_id = ?", (request_id,))
+    conn.commit()
+    return {"success": True}
+
+
 @router.get("/{request_id}")
 def get_trace(request_id: str):
     """获取单个追踪记录"""
