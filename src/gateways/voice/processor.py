@@ -74,14 +74,17 @@ class VoiceProcessor:
         self._running = False
         vad_close()
 
-    def play_sync(self, text: str):
+    def play_sync(self, text: str, request_id: str = ""):
         """同步播放语音：仅 HTTP 调 TTS 合成，不涉及音频设备，不加锁。"""
         logger.warning(f"play_sync 开始播放 {text}")
         try:
+            from src.common.utils.tracer import trace_event as _trace_event
             url = cfg.get_service_url("playback_services", "/api/speak/play")
-            resp = requests.post(url, json={"text": text, "sync": True}, timeout=60)
+            resp = requests.post(url, json={"text": text, "sync": True, "request_id": request_id}, timeout=60)
             if resp.status_code != 200:
                 logger.warning(f"TTS 返回 {resp.status_code}: {resp.text}")
+            if request_id:
+                _trace_event(request_id, "tts_end")
         except Exception as e:
             logger.error("TTS 播放失败: %s", e)
 
@@ -196,6 +199,12 @@ class VoiceProcessor:
 
     def _voice_pipeline(self, wakeword_id: str):
         """VAD 录音 → 声纹 → STT → brain_services → TTS"""
+        request_id = f"voice_{uuid.uuid4().hex[:12]}"
+
+        # 追踪：唤醒记录起始
+        from src.common.utils.tracer import trace_event as _trace_event, trace_content as _trace_content
+        _trace_event(request_id, "wakeword", protocol="voice")
+
         # VAD 录音
         self.set_state(STATE_RECORDING)
         try:
@@ -205,15 +214,19 @@ class VoiceProcessor:
             logger.error("VAD 录音失败: %s", e)
             self.set_state(STATE_IDLE)
             return
+        _trace_event(request_id, "record_end")
 
         self.set_state(STATE_PROCESSING)
 
         # 声纹识别（会移动音频文件到用户目录，返回新路径）
         user_id = "u_temp_voice"
         speaker = "未知用户"
+        speaker_score = 0.0
         audio_path = wav_path  # 后续 STT 用这个路径（声纹可能已移动文件）
         try:
             user_id, speaker, audio_path = self._vp.detect(wav_path, wakeword_id)
+            # 从 detech 过程中获取分数
+            _trace_event(request_id, "voiceprint_end", metadata={"speaker": speaker, "user_id": user_id})
         except Exception as e:
             logger.warning("声纹识别失败: %s", e)
 
@@ -224,6 +237,7 @@ class VoiceProcessor:
             logger.info("STT 结果: %s", text[:100])
         except Exception as e:
             logger.warning("STT 失败: %s", e)
+        _trace_event(request_id, "stt_end")
 
         if not text.strip():
             logger.info("未检测到语音，跳过")
@@ -231,12 +245,15 @@ class VoiceProcessor:
             self.set_state(STATE_IDLE)
             return
 
+        # 更新追踪内容
+        _trace_content(request_id, text)
+
         # POST brain_services（异步处理，真实回复会通过 _send_voice_text 推送回来）
         try:
             url = cfg.get_service_url("brain_services", "/api/agent-request")
             req_body = {
                 "protocol": "voice",
-                "request_id": f"voice_{uuid.uuid4().hex[:12]}",
+                "request_id": request_id,
                 "chat_type": "voice",
                 "user_id": user_id,
                 "content_type": "text",

@@ -394,6 +394,32 @@ async def proxy_wakeword_old(request: Request):
     return await _proxy_to_db("/api/wakeword/records/old", request)
 
 
+# ---- 代理 /api/admin/request-traces → db_services:9021 ----
+@app.api_route("/api/admin/request-traces/event", methods=["POST"])
+async def proxy_trace_event(request: Request):
+    return await _proxy_to_db("/api/request-traces/event", request)
+
+@app.api_route("/api/admin/request-traces/stats", methods=["GET"])
+async def proxy_trace_stats(request: Request):
+    return await _proxy_to_db("/api/request-traces/stats", request)
+
+@app.api_route("/api/admin/request-traces/{request_id}/content", methods=["PUT"])
+async def proxy_trace_content(request_id: str, request: Request):
+    return await _proxy_to_db(f"/api/request-traces/{request_id}/content", request)
+
+@app.api_route("/api/admin/request-traces/{request_id}/reply", methods=["PUT"])
+async def proxy_trace_reply(request_id: str, request: Request):
+    return await _proxy_to_db(f"/api/request-traces/{request_id}/reply", request)
+
+@app.api_route("/api/admin/request-traces/list", methods=["GET"])
+async def proxy_trace_list(request: Request):
+    return await _proxy_to_db("/api/request-traces", request)
+
+@app.api_route("/api/admin/request-traces/{request_id}", methods=["GET"])
+async def proxy_trace_detail(request_id: str, request: Request):
+    return await _proxy_to_db(f"/api/request-traces/{request_id}", request)
+
+
 # ---- 代理 /api/admin/voiceprints → db_services:9021 ----
 @app.api_route("/api/admin/voiceprints", methods=["GET"])
 async def proxy_voiceprints_list(request: Request):

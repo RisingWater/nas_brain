@@ -144,6 +144,7 @@ class StrategyEngine:
             user_id=req.user_id,
             messages=messages,
             tools=filtered_tools,
+            request_id=req.request_id,
         )
 
         # __SKIP__：不回复，按 user_msg_id 删除该条消息

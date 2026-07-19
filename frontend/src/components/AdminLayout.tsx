@@ -35,6 +35,7 @@ const menuItems = [
       { key: '/users', icon: <UserOutlined />, label: '用户策略' },
       { key: '/chat-history', icon: <MessageOutlined />, label: '聊天记录' },
       { key: '/memory', icon: <DatabaseOutlined />, label: '记忆管理' },
+      { key: '/traces', icon: <ClockCircleOutlined />, label: '请求追踪' },
     ],
   },
   {

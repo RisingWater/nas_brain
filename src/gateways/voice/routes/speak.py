@@ -20,11 +20,13 @@ def set_processor(proc):
 
 class SpeakRequest(BaseModel):
     text: str = Field(..., min_length=1, description="要播放的文字")
+    request_id: str = Field("", description="链路追踪 ID")
 
 
 class PlayWavRequest(BaseModel):
     data: str = Field(..., description="base64 编码的 WAV 音频数据")
     sample_rate: int = Field(24000, description="采样率")
+    request_id: str = Field("", description="链路追踪 ID")
 
 
 @router.post("/speak")
@@ -33,7 +35,10 @@ async def speak(req: SpeakRequest):
     if not _processor:
         raise HTTPException(503, "语音处理器未就绪")
     try:
-        await asyncio.to_thread(_processor.play_sync, req.text)
+        from src.common.utils.tracer import trace_event as _trace_event
+        await asyncio.to_thread(_processor.play_sync, req.text, req.request_id)
+        if req.request_id:
+            _trace_event(req.request_id, "play_end")
         return {"code": 200, "data": {"text": req.text}, "message": "播放完成"}
     except Exception as e:
         logger.error("播放失败: %s", e)
@@ -47,7 +52,12 @@ async def play_wav(req: PlayWavRequest):
         raise HTTPException(503, "语音处理器未就绪")
     try:
         wav_data = base64.b64decode(req.data)
+        from src.common.utils.tracer import trace_event as _trace_event
+        if req.request_id:
+            _trace_event(req.request_id, "play_start")
         await asyncio.to_thread(_processor.play_wav, wav_data, req.sample_rate)
+        if req.request_id:
+            _trace_event(req.request_id, "play_end")
         return {"code": 200, "data": {"played": True}, "message": "播放完成"}
     except Exception as e:
         logger.error("WAV 播放失败: %s", e)

@@ -6,7 +6,9 @@ import {
   ClockCircleOutlined, CloudServerOutlined,
 } from '@ant-design/icons';
 import { getDashboardStats } from '../api/dashboard';
+import { getTraceStats } from '../api/traces';
 import type { DashboardStats } from '../api/dashboard';
+import type { TraceStats } from '../api/traces';
 
 const { Text, Title } = Typography;
 
@@ -33,13 +35,18 @@ function formatUptime(seconds: number): string {
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [traceStats, setTraceStats] = useState<TraceStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const data = await getDashboardStats();
+      const [data, tdata] = await Promise.all([
+        getDashboardStats(),
+        getTraceStats().catch(() => null),
+      ]);
       setStats(data);
+      setTraceStats(tdata);
     } catch {
       // keep old data if any
     } finally {
@@ -49,7 +56,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchStats();
-    const timer = setInterval(fetchStats, 10000); // 每10秒刷新
+    const timer = setInterval(fetchStats, 10000);
     return () => clearInterval(timer);
   }, []);
 
@@ -216,6 +223,19 @@ export default function Dashboard() {
               value={s.brain.total_tokens.toLocaleString()}
               valueStyle={{ fontSize: 20, color: '#1677ff' }}
             />
+          </Card>
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <Card size="small" hoverable onClick={() => window.location.href = '/traces'}>
+            <Statistic
+              title="平均应答耗时"
+              value={traceStats ? `${traceStats.avg_total_ms.toFixed(0)}ms` : '-'}
+              valueStyle={{ fontSize: 20, color: traceStats && traceStats.avg_total_ms > 5000 ? '#ff4d4f' : '#52c41a' }}
+              prefix={<ClockCircleOutlined />}
+            />
+            <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
+              共 {traceStats?.total_count || 0} 次 | 点击查看详情
+            </div>
           </Card>
         </Col>
       </Row>

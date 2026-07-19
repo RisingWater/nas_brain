@@ -14,6 +14,7 @@ import WakewordManager from './pages/WakewordManager';
 import VoiceprintManager from './pages/VoiceprintManager';
 import Dashboard from './pages/Dashboard';
 import BackupManager from './pages/BackupManager';
+import TracePage from './pages/TracePage';
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/wakeword" element={<WakewordManager />} />
           <Route path="/voiceprints" element={<VoiceprintManager />} />
           <Route path="/backup" element={<BackupManager />} />
+          <Route path="/traces" element={<TracePage />} />
         </Route>
       </Routes>
     </BrowserRouter>

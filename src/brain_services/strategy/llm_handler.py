@@ -6,6 +6,7 @@ from src.common.clients.deepseek import DeepSeekAPI
 from ..tools import registry as tool_registry
 from .chat_recorder import ChatRecorder
 from ..stats import stats
+from src.common.utils.tracer import trace_event as _trace_event
 
 logger = logging.getLogger("brain_services.strategy.llm_handler")
 
@@ -22,7 +23,7 @@ class LLMHandler:
         self.recorder = ChatRecorder()
 
     def handle(self, user_id: str, messages: list[dict],
-               tools: list[dict]) -> tuple[str, list[str]]:
+               tools: list[dict], request_id: str = "") -> tuple[str, list[str]]:
         """函数调用循环：LLM → 工具 → LLM → ... → 最终回复
 
         Returns:
@@ -30,6 +31,7 @@ class LLMHandler:
         """
         iteration = 0
         all_files = []
+        is_first_llm = True
 
         while iteration < self.MAX_ITERATIONS:
             iteration += 1
@@ -46,6 +48,12 @@ class LLMHandler:
 
             if not response:
                 return "（LLM 响应失败）", all_files
+
+            # 追踪：第一轮 LLM 思考完成
+            if is_first_llm:
+                is_first_llm = False
+                if request_id:
+                    _trace_event(request_id, "llm_first_done")
 
             content = response.get("content") or ""
             tool_calls = response.get("tool_calls")
@@ -75,6 +83,11 @@ class LLMHandler:
                     continue
                 func = tc.get("function", {})
                 tool_name = func.get("name", "")
+
+                # 追踪：工具调用开始
+                if request_id:
+                    _trace_event(request_id, "tool_call", metadata={"tool": tool_name})
+
                 try:
                     raw_args = func.get("arguments", "{}")
                     if isinstance(raw_args, str):
@@ -88,6 +101,10 @@ class LLMHandler:
                 result = tool_registry.execute(tool_name, args)
                 result_text = result.get("text", "（无返回）")
                 logger.info("工具 %s 返回: %.100s", tool_name, result_text)
+
+                # 追踪：工具返回
+                if request_id:
+                    _trace_event(request_id, "tool_result", metadata={"tool": tool_name})
 
                 # 收集附件文件
                 files = result.get("files", [])

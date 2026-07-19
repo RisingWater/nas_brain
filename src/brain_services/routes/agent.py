@@ -13,6 +13,7 @@ from ..schema.brain_schema import AgentResponse
 from src.common.schemas.agent_request import AgentRequest, ProtocolType
 from ..strategy import strategy_engine
 from ..stats import stats
+from src.common.utils.tracer import trace_event, trace_reply as _trace_reply
 
 logger = logging.getLogger("brain_services")
 
@@ -57,7 +58,7 @@ def _send_wechat_file(who: str, file_path: str) -> bool:
     return False
 
 
-def _send_voice_text(text: str, wakeword_id: str = ""):
+def _send_voice_text(text: str, wakeword_id: str = "", request_id: str = ""):
     """通过 voice_gateway 播放语音"""
     if not text or text.strip() == "__SKIP__":
         logger.info("语音 SKIP，不播放")
@@ -71,7 +72,7 @@ def _send_voice_text(text: str, wakeword_id: str = ""):
     from src.common.utils import cfg
     try:
         url = cfg.get_service_url("voice_gateway", "/api/voice/speak")
-        resp = _req.post(url, json={"text": text}, timeout=120)
+        resp = _req.post(url, json={"text": text, "request_id": request_id}, timeout=120)
         if resp.status_code == 200:
             logger.info("语音已播放: %.50s", text)
             if wakeword_id:
@@ -107,11 +108,21 @@ def _process_async(req: AgentRequest):
         response = strategy_engine.process(req)
 
         if not response.data:
+            trace_event(req.request_id, "brain_done", protocol=req.protocol.value, user_id=req.user_id)
             return
 
-        # 统计：有 text 回复且非 SKIP 算一次有效回答
+        # 统计 + 追踪
         text = (response.data or {}).get("text", "")
-        stats.record_request(answered=bool(text and text.strip() != "__SKIP__"))
+        is_skip = text and text.strip() == "__SKIP__"
+        stats.record_request(answered=not is_skip)
+
+        # 非 SKIP 才保留追踪记录（SKIP 的只记 brain_done 时间不记回复）
+        if not is_skip:
+            trace_event(req.request_id, "brain_done", protocol=req.protocol.value, user_id=req.user_id)
+            if text:
+                _trace_reply(req.request_id, reply=text)
+        else:
+            _trace_reply(req.request_id, skip=True)
 
         who = req.metadata.get("wechat_name", "")
 
@@ -121,7 +132,7 @@ def _process_async(req: AgentRequest):
             _send_wechat_text(who, text)
         elif text and req.protocol == ProtocolType.VOICE:
             wakeword_id = (req.metadata or {}).get("wakeword_id", "")
-            _send_voice_text(text, wakeword_id)
+            _send_voice_text(text, wakeword_id, req.request_id)
 
         # 推送附件文件
         files = response.data.get("files", [])
@@ -142,6 +153,10 @@ async def receive_request(req: AgentRequest):
     """接收 AgentRequest，立即返回，后台异步处理"""
     logger.info("收到请求: id=%s user=%s type=%s content=%.50s",
                 req.request_id, req.user_id, req.content_type.value, req.content or "")
+
+    # 追踪：收到请求（仅非 WECHAT group 无 @ 才记录）
+    if req.protocol != ProtocolType.WECHAT or req.metadata.get("mentioned", True):
+        trace_event(req.request_id, "brain_receive", protocol=req.protocol.value, user_id=req.user_id)
 
     # 起后台线程处理，不阻塞 HTTP 响应
     threading.Thread(target=_process_async, args=(req,), daemon=True).start()

@@ -23,14 +23,15 @@ class PlayRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=2000, description="要播放的文本")
     voice: str = Field("", description="语音名称，空则用默认")
     sync: bool = Field(False, description="是否同步播放（阻塞到播完），默认异步返回")
+    request_id: str = Field("", description="链路追踪 ID")
 
 
-def _play_via_voice_gateway(wav_data: bytes, sample_rate: int = 24000):
+def _play_via_voice_gateway(wav_data: bytes, sample_rate: int = 24000, request_id: str = ""):
     """将 WAV 音频发到 voice_gateway 播放，同步阻塞到播完"""
     url = cfg.get_service_url("voice_gateway", "/api/voice/play-wav")
     encoded = base64.b64encode(wav_data).decode("ascii")
     try:
-        resp = _req.post(url, json={"data": encoded, "sample_rate": sample_rate}, timeout=120)
+        resp = _req.post(url, json={"data": encoded, "sample_rate": sample_rate, "request_id": request_id}, timeout=120)
         if resp.status_code != 200:
             logger.warning("voice_gateway 播放返回 %s: %s", resp.status_code, resp.text)
             return False
@@ -72,8 +73,9 @@ async def play(req: PlayRequest):
         raise HTTPException(502, "语音合成失败")
 
     sample_rate = 24000  # Edge TTS 默认 24kHz
+    rid = req.request_id or ""
     if req.sync:
-        ok = _play_via_voice_gateway(result["data"], sample_rate)
+        ok = _play_via_voice_gateway(result["data"], sample_rate, rid)
         return {
             "code": 200 if ok else 502,
             "data": {"from_cache": result["from_cache"]},
@@ -84,7 +86,7 @@ async def play(req: PlayRequest):
         import threading
         threading.Thread(
             target=_play_via_voice_gateway,
-            args=(result["data"], sample_rate),
+            args=(result["data"], sample_rate, rid),
             daemon=True,
         ).start()
         return {

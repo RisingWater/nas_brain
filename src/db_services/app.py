@@ -3,7 +3,7 @@ import os
 os.environ["LOG_SERVER_NAME"] = "db_services"
 
 from fastapi import FastAPI
-from .routes import users, schedules, kv, configs, chat, summaries, wakeword, voiceprints
+from .routes import users, schedules, kv, configs, chat, summaries, wakeword, voiceprints, traces
 from src.common.utils import cfg
 from src.common.utils import log_manager
 
@@ -20,6 +20,7 @@ app.include_router(chat.router, prefix="/api/chat-messages", tags=["聊天记录
 app.include_router(summaries.router, prefix="/api/chat-summaries", tags=["中期记忆"])
 app.include_router(wakeword.router, prefix="/api/wakeword", tags=["唤醒词"])
 app.include_router(voiceprints.router, prefix="/api/voiceprints", tags=["声纹"])
+app.include_router(traces.router, prefix="/api/request-traces", tags=["链路追踪"])
 
 @app.get("/health")
 async def health():
