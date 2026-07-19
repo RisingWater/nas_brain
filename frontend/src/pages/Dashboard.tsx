@@ -222,17 +222,8 @@ export default function Dashboard() {
         </Col>
       </Row>
 
-      {/* ===== 活跃用户 + Brain运行 ===== */}
+      {/* ===== Brain运行 ===== */}
       <Row gutter={12} style={{ marginBottom: 16 }}>
-        <Col xs={8} sm={6} md={4}>
-          <Card size="small"><Statistic title="5分钟活跃" value={s.active_users["5min"]} valueStyle={{ fontSize: 22 }} /></Card>
-        </Col>
-        <Col xs={8} sm={6} md={4}>
-          <Card size="small"><Statistic title="1小时活跃" value={s.active_users["1hour"]} valueStyle={{ fontSize: 22 }} /></Card>
-        </Col>
-        <Col xs={8} sm={6} md={4}>
-          <Card size="small"><Statistic title="24小时活跃" value={s.active_users["1day"]} valueStyle={{ fontSize: 22 }} /></Card>
-        </Col>
         <Col xs={12} sm={6} md={4}>
           <Card size="small" hoverable onClick={() => window.location.href = '/traces'}>
             <Statistic title="Brain运行" value={s.brain.uptime_seconds} valueStyle={{ fontSize: 18 }}
@@ -254,65 +245,42 @@ export default function Dashboard() {
         </div>
         <Row gutter={12}>
           <Col xs={12} sm={6} md={4}>
-            <Card size="small"><Statistic title="Prompt" value={s.brain.prompt_tokens.toLocaleString()} valueStyle={{ fontSize: 20 }} /></Card>
-          </Col>
-          <Col xs={12} sm={6} md={4}>
-            <Card size="small"><Statistic title="Completion" value={s.brain.completion_tokens.toLocaleString()} valueStyle={{ fontSize: 20 }} /></Card>
-          </Col>
-          <Col xs={12} sm={6} md={4}>
             <Card size="small"><Statistic title="总计" value={s.brain.total_tokens.toLocaleString()} valueStyle={{ fontSize: 20, color: '#1677ff' }} /></Card>
-          </Col>
-          <Col xs={12} sm={6} md={4}>
-            <Card size="small"><Statistic title="总请求" value={s.brain.total_requests} valueStyle={{ fontSize: 20 }} /></Card>
-          </Col>
-          <Col xs={12} sm={6} md={4}>
-            <Card size="small"><Statistic title="有效回答" value={s.brain.total_answers} valueStyle={{ fontSize: 20 }} /></Card>
           </Col>
         </Row>
       </Card>
 
       {/* ===== 柱状图：每日请求/回答、耗时 ===== */}
-      {hasDailyData && (
-        <>
-          <Row gutter={12} style={{ marginBottom: 16 }}>
-            <Col xs={24} lg={14}>
-              <Card size="small" title={<span><BarChartOutlined /> 每日请求 / 有效回答</span>}>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={dailyData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tickFormatter={fmtDate} fontSize={12} />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="total" name="总请求" fill="#1677ff" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="answered" name="有效回答" fill="#52c41a" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-            </Col>
-            <Col xs={24} lg={10}>
-              <Card size="small" title={<span><BarChartOutlined /> 每日平均耗时</span>}>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={dailyData.filter(d => d.avg_ms > 0)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tickFormatter={fmtDate} fontSize={12} />
-                    <YAxis tickFormatter={(v: number) => `${v}ms`} fontSize={12} />
-                    <Tooltip formatter={(v: number) => `${v.toFixed(0)}ms`} />
-                    <Bar dataKey="avg_ms" name="平均耗时" fill="#722ed1" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-            </Col>
-          </Row>
-        </>
-      )}
-
-      {/* 无每日数据时的说明 */}
-      {!hasDailyData && (
-        <Card size="small" style={{ marginBottom: 16 }}>
-          <Text type="secondary">以上统计为累计值。发送消息后，每日请求/回答和耗时的柱状图会在这里显示。</Text>
-        </Card>
-      )}
+      <Row gutter={12} style={{ marginBottom: 16 }}>
+        <Col xs={24} lg={14}>
+          <Card size="small" title={<span><BarChartOutlined /> 每日请求 / 有效回答</span>}>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dailyData.length > 0 ? dailyData : [{ date: new Date().toISOString().slice(0,10), total: 0, answered: 0, avg_ms: 0 }]}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tickFormatter={fmtDate} fontSize={12} />
+                <YAxis allowDecimals={false} domain={[0, 'auto']} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="total" name="总请求" fill="#1677ff" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="answered" name="有效回答" fill="#52c41a" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+        <Col xs={24} lg={10}>
+          <Card size="small" title={<span><BarChartOutlined /> 每日平均耗时</span>}>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dailyData.filter(d => d.avg_ms > 0).length > 0 ? dailyData.filter(d => d.avg_ms > 0) : [{ date: new Date().toISOString().slice(0,10), total: 0, answered: 0, avg_ms: 0 }]}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tickFormatter={fmtDate} fontSize={12} />
+                <YAxis tickFormatter={(v: number) => `${v}ms`} fontSize={12} domain={[0, 'auto']} />
+                <Tooltip formatter={(v: number) => `${v.toFixed(0)}ms`} />
+                <Bar dataKey="avg_ms" name="平均耗时" fill="#722ed1" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 }
