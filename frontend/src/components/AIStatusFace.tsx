@@ -169,7 +169,7 @@ export default function AIStatusFace({ state, size = 300 }: AIStatusFaceProps) {
     }}>
       <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: 'block' }}>
         <defs>
-          <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
+          <filter id={glowId} filterUnits="userSpaceOnUse" x="-10" y="-10" width="120" height="120">
             <feGaussianBlur stdDeviation="2" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
