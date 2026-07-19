@@ -6,6 +6,7 @@ from src.common.clients.deepseek import DeepSeekAPI
 from ..tools import registry as tool_registry
 from .chat_recorder import ChatRecorder
 from ..stats import stats
+from ..status import ai_status
 from src.common.utils.tracer import trace_event as _trace_event
 
 logger = logging.getLogger("brain_services.strategy.llm_handler")
@@ -83,6 +84,9 @@ class LLMHandler:
             has_final = False
             final_text = ""
 
+            # 状态：操作中（有工具调用）
+            ai_status.set("operating")
+
             # 逐个执行工具
             for tc in tool_calls:
                 if tc.get("type") != "function":
@@ -145,6 +149,10 @@ class LLMHandler:
                     "tool_call_id": str(tc.get("id", "")),
                     "content": json.dumps(result, ensure_ascii=False),
                 })
+
+            # 工具执行完毕，回到思考状态
+            if not has_final:
+                ai_status.set("thinking")
 
             if has_final:
                 # 清理上下文中孤立的 tool_calls（final 工具不会添加 tool response）

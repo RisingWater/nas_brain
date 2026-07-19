@@ -13,6 +13,7 @@ from ..schema.brain_schema import AgentResponse
 from src.common.schemas.agent_request import AgentRequest, ProtocolType
 from ..strategy import strategy_engine
 from ..stats import stats
+from ..status import ai_status
 from src.common.utils.tracer import trace_event, trace_reply as _trace_reply
 
 logger = logging.getLogger("brain_services")
@@ -105,10 +106,14 @@ def _update_wakeword_category(wakeword_id: str, category: str):
 def _process_async(req: AgentRequest):
     """后台处理：策略引擎处理 → 推送回复到 gateway"""
     try:
+        # 状态：思考中
+        ai_status.set("thinking")
+
         response = strategy_engine.process(req)
 
         if not response.data:
             # 跳过（群聊无 @）或 ignore，不追踪
+            ai_status.set("idle")
             return
 
         # 追踪：实际开始处理
@@ -128,9 +133,13 @@ def _process_async(req: AgentRequest):
                         user_id=req.user_id, metadata=token_meta)
             if text:
                 _trace_reply(req.request_id, reply=text)
+            # 状态：说话中（准备/正在输出回复）
+            ai_status.set("speaking")
         else:
             # __SKIP__：标记但不保留追踪记录
             _trace_reply(req.request_id, skip=True)
+            ai_status.set("idle")
+            return
 
         who = req.metadata.get("wechat_name", "")
 
@@ -138,9 +147,12 @@ def _process_async(req: AgentRequest):
         text = response.data.get("text", "")
         if text and req.protocol == ProtocolType.WECHAT and who:
             _send_wechat_text(who, text)
+            # 微信发送完毕 → 空闲
+            ai_status.set("idle")
         elif text and req.protocol == ProtocolType.VOICE:
             wakeword_id = (req.metadata or {}).get("wakeword_id", "")
             _send_voice_text(text, wakeword_id, req.request_id)
+            # 语音 idle 由 speak.py 在播放完后设置
 
         # 推送附件文件
         files = response.data.get("files", [])
@@ -152,6 +164,10 @@ def _process_async(req: AgentRequest):
                         os.remove(fp)
                     except Exception:
                         pass
+
+        # 非语音且非微信的场景（如 WEB 管理后台）→ 直接空闲
+        if req.protocol not in (ProtocolType.VOICE, ProtocolType.WECHAT):
+            ai_status.set("idle")
     except Exception as e:
         logger.error("异步处理异常: %s", e, exc_info=True)
 

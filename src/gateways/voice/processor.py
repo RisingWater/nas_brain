@@ -197,9 +197,20 @@ class VoiceProcessor:
 
     # ---- VAD + 声纹 + STT + brain_services 管线 ----
 
+    def _set_ai_status(self, state: str, speaker: str = "", **extra):
+        """通过 brain_services 设置 AI 状态"""
+        try:
+            url = cfg.get_service_url("brain_services", "/api/status/set")
+            requests.post(url, json={"state": state, "speaker": speaker, "extra": extra}, timeout=5)
+        except Exception as e:
+            logger.debug("设置状态失败: %s", e)
+
     def _voice_pipeline(self, wakeword_id: str):
         """VAD 录音 → 声纹 → STT → brain_services → TTS"""
         request_id = f"voice_{uuid.uuid4().hex[:12]}"
+
+        # 状态：聆听中
+        self._set_ai_status("listening")
 
         # 追踪：唤醒记录起始
         from src.common.utils.tracer import trace_event as _trace_event, trace_content as _trace_content
@@ -247,6 +258,9 @@ class VoiceProcessor:
 
         # 更新追踪内容
         _trace_content(request_id, text)
+
+        # 状态：思考中
+        self._set_ai_status("thinking", speaker=speaker)
 
         # POST brain_services（异步处理，真实回复会通过 _send_voice_text 推送回来）
         try:

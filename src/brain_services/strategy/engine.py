@@ -7,6 +7,7 @@ from src.common.schemas.agent_request import AgentRequest, ProtocolType
 from ..schema.brain_schema import AgentResponse
 from ..processors import registry as proc_registry
 from ..tools import registry as tool_registry
+from ..status import ai_status
 from .chat_recorder import ChatRecorder
 from .context_builder import LLMContextBuilder
 from .llm_handler import LLMHandler
@@ -138,6 +139,9 @@ class StrategyEngine:
         filtered_tools = self.tool_filter.filter(
             all_tools, config.get("allowed_tools"),
         )
+
+        # 状态：思考中
+        ai_status.set("thinking")
 
         # 执行 LLM 循环
         reply, files, req_tokens = self.llm_handler.handle(

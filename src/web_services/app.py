@@ -464,6 +464,13 @@ async def proxy_agent_request(request: Request):
     return await _proxy_to_brain("/api/agent-request", request)
 
 
+# ---- 代理 /api/admin/ai-status → brain_services:9031 ----
+@app.api_route("/api/admin/ai-status", methods=["GET", "POST"])
+async def proxy_ai_status(request: Request):
+    path = "/api/status/set" if request.method == "POST" else "/api/status"
+    return await _proxy_to_brain(path, request)
+
+
 # 静态文件 — 前端构建产物
 _frontend_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
 _frontend_dist = os.path.normpath(_frontend_dist)

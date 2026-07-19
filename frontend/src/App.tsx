@@ -15,11 +15,13 @@ import VoiceprintManager from './pages/VoiceprintManager';
 import Dashboard from './pages/Dashboard';
 import BackupManager from './pages/BackupManager';
 import TracePage from './pages/TracePage';
+import AIStatusPage from './pages/AIStatusPage';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/ai-status" element={<AIStatusPage />} />
         <Route element={<AdminLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/users" element={<UserList />} />

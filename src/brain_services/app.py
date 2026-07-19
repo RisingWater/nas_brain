@@ -6,7 +6,7 @@ os.environ["LOG_SERVER_NAME"] = "brain_services"
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from src.common.utils import log_manager
-from .routes import agent, tools_mgmt, processors_mgmt, strategy_mgmt
+from .routes import agent, tools_mgmt, processors_mgmt, strategy_mgmt, status
 from .tools.plugin_manager import load_tools
 from .processors.plugin_manager import load_all as load_processors
 from .strategy.summarizer import summarizer
@@ -34,6 +34,7 @@ app.include_router(agent.router, prefix="/api/agent-request", tags=["大脑请�
 app.include_router(tools_mgmt.router, prefix="/api/tools", tags=["工具管理"])
 app.include_router(processors_mgmt.router, prefix="/api/processors", tags=["处理器管理"])
 app.include_router(strategy_mgmt.router, prefix="/api/strategy", tags=["策略管理"])
+app.include_router(status.router, prefix="/api", tags=["AI 状态"])
 
 
 @app.get("/health")
