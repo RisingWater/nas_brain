@@ -40,6 +40,7 @@ def _row_to_dict(row) -> dict:
         "request_id": row["request_id"],
         "protocol": row["protocol"],
         "user_id": row["user_id"],
+        "user_name": row["display_name"] or row["user_id"],
         "content": row["content"],
         "stages": json.loads(row["stages"]) if row["stages"] else {},
         "metadata": json.loads(row["metadata"]) if row["metadata"] else {},
@@ -248,7 +249,10 @@ def list_traces(
 
     total = conn.execute(f"SELECT COUNT(*) FROM request_traces WHERE {where}", params).fetchone()[0]
     rows = conn.execute(
-        f"SELECT * FROM request_traces WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+        f"""SELECT t.*, COALESCE(u.display_name, '') as display_name
+            FROM request_traces t
+            LEFT JOIN users u ON t.user_id = u.user_id
+            WHERE {where} ORDER BY t.id DESC LIMIT ? OFFSET ?""",
         (*params, limit, offset),
     ).fetchall()
 
@@ -259,7 +263,13 @@ def list_traces(
 def get_trace(request_id: str):
     """获取单个追踪记录"""
     conn = db.get_connection()
-    row = conn.execute("SELECT * FROM request_traces WHERE request_id = ?", (request_id,)).fetchone()
+    row = conn.execute(
+        """SELECT t.*, COALESCE(u.display_name, '') as display_name
+           FROM request_traces t
+           LEFT JOIN users u ON t.user_id = u.user_id
+           WHERE t.request_id = ?""",
+        (request_id,),
+    ).fetchone()
     if not row:
         raise HTTPException(404, "追踪记录不存在")
     return _row_to_dict(row)

@@ -100,7 +100,7 @@ function TraceDetail({ requestId, onBack }: { requestId: string; onBack: () => v
         <Descriptions column={4} size="small">
           <Descriptions.Item label="请求 ID"><Text code>{trace.request_id}</Text></Descriptions.Item>
           <Descriptions.Item label="协议"><Tag>{trace.protocol}</Tag></Descriptions.Item>
-          <Descriptions.Item label="用户">{meta.user_id || trace.user_id || '-'}</Descriptions.Item>
+          <Descriptions.Item label="用户">{trace.user_name || trace.user_id || '-'}</Descriptions.Item>
           <Descriptions.Item label="耗时">{totalMs ? formatDur(totalMs) : '-'}</Descriptions.Item>
           {meta.speaker && <Descriptions.Item label="声纹">{meta.speaker}</Descriptions.Item>}
           {meta.tool && <Descriptions.Item label="工具">{meta.tool}</Descriptions.Item>}
@@ -192,42 +192,65 @@ export default function TracePage() {
     return <TraceDetail requestId={detailId} onBack={() => setDetailId(null)} />;
   }
 
+  // 阶段耗时对（用于列表中的摘要和详情计算）
+  const stagePairs: { label: string; start: string; end: string }[] = [
+    { label: '录音', start: 'wakeword', end: 'record_end' },
+    { label: '声纹', start: 'record_end', end: 'voiceprint_end' },
+    { label: 'STT', start: 'voiceprint_end', end: 'stt_end' },
+    { label: '大脑', start: 'brain_receive', end: 'brain_done' },
+    { label: 'TTS', start: 'tts_end', end: 'play_end' },
+  ];
+
+  function calcDur(stages: Record<string, number>, start: string, end: string): number | null {
+    if (stages[start] && stages[end] && stages[end] >= stages[start]) return stages[end] - stages[start];
+    return null;
+  }
+
   const columns = [
     {
-      title: '请求 ID', dataIndex: 'request_id', key: 'request_id', width: 200,
+      title: '请求 ID', dataIndex: 'request_id', key: 'request_id', width: 140,
       render: (v: string) => <Text code copyable style={{ fontSize: 11 }}>{v}</Text>,
     },
     {
-      title: '协议', dataIndex: 'protocol', key: 'protocol', width: 80,
+      title: '协议', dataIndex: 'protocol', key: 'protocol', width: 70,
       render: (v: string) => <Tag>{v || '-'}</Tag>,
     },
     {
-      title: '内容', dataIndex: 'content', key: 'content', ellipsis: true,
-      render: (v: string) => v ? <Text ellipsis style={{ maxWidth: 300 }}>{v}</Text> : '-',
+      title: '用户', dataIndex: 'user_name', key: 'user_name', width: 100,
+      render: (v: string) => v || '-',
     },
     {
-      title: '耗时', key: 'duration', width: 100,
+      title: '内容', dataIndex: 'content', key: 'content', ellipsis: true,
+      render: (v: string) => v ? <Text ellipsis style={{ maxWidth: 260 }}>{v}</Text> : '-',
+    },
+    {
+      title: '阶段耗时', key: 'durations', width: 200,
       render: (_: any, r: TraceItem) => {
         const stages = r.stages || {};
-        const times = Object.values(stages).filter((v): v is number => typeof v === 'number');
-        if (times.length < 2) return '-';
-        return <Text>{formatDur(Math.max(...times) - Math.min(...times))}</Text>;
+        const parts: string[] = [];
+        for (const pair of stagePairs) {
+          const d = calcDur(stages, pair.start, pair.end);
+          if (d) parts.push(`${pair.label} ${(d / 1000).toFixed(1)}s`);
+        }
+        if (parts.length === 0) {
+          // fallback: 总耗时
+          const times = Object.values(stages).filter((v): v is number => typeof v === 'number');
+          if (times.length < 2) return '-';
+          return <Text>{(Math.max(...times) - Math.min(...times)) / 1000}s</Text>;
+        }
+        return <Text style={{ fontSize: 12 }}>{parts.join(' | ')}</Text>;
       },
     },
     {
-      title: '阶段数', key: 'stages', width: 70,
-      render: (_: any, r: TraceItem) => Object.keys(r.stages || {}).length,
-    },
-    {
-      title: 'SKIP', dataIndex: 'reply_skip', key: 'reply_skip', width: 60,
+      title: 'SKIP', dataIndex: 'reply_skip', key: 'reply_skip', width: 55,
       render: (v: boolean) => v ? <Tag color="orange">SKIP</Tag> : null,
     },
     {
-      title: '时间', dataIndex: 'created_at', key: 'created_at', width: 170,
+      title: '时间', dataIndex: 'created_at', key: 'created_at', width: 150,
       render: (v: string) => v.replace('T', ' ').slice(0, 19),
     },
     {
-      title: '操作', key: 'actions', width: 70,
+      title: '操作', key: 'actions', width: 60,
       render: (_: any, r: TraceItem) => (
         <Button type="link" size="small" onClick={() => setDetailId(r.request_id)}>详情</Button>
       ),

@@ -5,6 +5,7 @@ export interface TraceItem {
   request_id: string;
   protocol: string;
   user_id: string;
+  user_name: string;
   content: string;
   stages: Record<string, number>;
   metadata: Record<string, any>;

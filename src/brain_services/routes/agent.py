@@ -116,8 +116,9 @@ def _process_async(req: AgentRequest):
             ai_status.set("idle")
             return
 
-        # 追踪：实际开始处理
-        trace_event(req.request_id, "brain_receive", protocol=req.protocol.value, user_id=req.user_id)
+        # 追踪：实际开始处理（含请求内容）
+        trace_event(req.request_id, "brain_receive", protocol=req.protocol.value,
+                    user_id=req.user_id, metadata={"content": req.content or ""})
 
         # 统计 + 追踪
         text = (response.data or {}).get("text", "")
