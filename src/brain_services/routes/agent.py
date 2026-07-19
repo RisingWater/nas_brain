@@ -154,9 +154,8 @@ async def receive_request(req: AgentRequest):
     logger.info("收到请求: id=%s user=%s type=%s content=%.50s",
                 req.request_id, req.user_id, req.content_type.value, req.content or "")
 
-    # 追踪：收到请求（仅非 WECHAT group 无 @ 才记录）
-    if req.protocol != ProtocolType.WECHAT or req.metadata.get("mentioned", True):
-        trace_event(req.request_id, "brain_receive", protocol=req.protocol.value, user_id=req.user_id)
+    # 追踪：收到请求
+    trace_event(req.request_id, "brain_receive", protocol=req.protocol.value, user_id=req.user_id)
 
     # 起后台线程处理，不阻塞 HTTP 响应
     threading.Thread(target=_process_async, args=(req,), daemon=True).start()
