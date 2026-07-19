@@ -403,6 +403,10 @@ async def proxy_trace_event(request: Request):
 async def proxy_trace_stats(request: Request):
     return await _proxy_to_db("/api/request-traces/stats", request)
 
+@app.api_route("/api/admin/request-traces/daily", methods=["GET"])
+async def proxy_trace_daily(request: Request):
+    return await _proxy_to_db("/api/request-traces/daily", request)
+
 @app.api_route("/api/admin/request-traces/{request_id}/content", methods=["PUT"])
 async def proxy_trace_content(request_id: str, request: Request):
     return await _proxy_to_db(f"/api/request-traces/{request_id}/content", request)

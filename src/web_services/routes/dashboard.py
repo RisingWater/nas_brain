@@ -1,34 +1,33 @@
 """web_services — 监控面板 + 数据备份"""
 import os
-import io
-import json
 import zipfile
 import logging
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 
 logger = logging.getLogger("web_services.dashboard")
 
 router = APIRouter()
 
 _PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-_DATA_DIR = os.path.join(_PROJECT_ROOT, "data")
 _BACKUP_DIR = os.path.join(_PROJECT_ROOT, "backup")
+_STORAGE_LIMIT = 100 * 1024 * 1024 * 1024  # 100 GB
 
-
-# ===================== 监控面板 =====================
+_SERVICE_PORTS = {
+    "service_manager": 9022, "web_services": 9020, "db_services": 9021,
+    "wechat_gateway": 9030, "brain_services": 9031, "playback_services": 9041,
+    "schedule_services": 9040, "voice_gateway": 9050,
+}
 
 
 def _get_dir_size(path: str) -> int:
-    """递归统计目录大小"""
     total = 0
     try:
         for dirpath, dirnames, filenames in os.walk(path):
             for f in filenames:
-                fp = os.path.join(dirpath, f)
                 try:
-                    total += os.path.getsize(fp)
+                    total += os.path.getsize(os.path.join(dirpath, f))
                 except OSError:
                     pass
     except OSError:
@@ -36,65 +35,48 @@ def _get_dir_size(path: str) -> int:
     return total
 
 
-def _get_db_stats() -> dict:
-    db_path = os.path.join(_DATA_DIR, "nas_brain.db")
+def _get_service_memory() -> dict[str, int]:
+    """获取各微服务的 Python 进程内存
+    匹配: 按端口从 /proc/*/cmdline 中识别服务，再读 VmRSS
+    """
+    mem_by_port: dict[int, int] = {}
     try:
-        size = os.path.getsize(db_path)
-        return {"size": size, "path": "data/nas_brain.db"}
+        pids = [p for p in os.listdir("/proc") if p.isdigit()]
     except OSError:
-        return {"size": 0, "path": "data/nas_brain.db"}
+        return {}
 
+    for pid in pids:
+        try:
+            cmdline = open(f"/proc/{pid}/cmdline", "rb").read().decode("utf-8", errors="replace")
+        except OSError:
+            continue
 
-def _get_audio_stats() -> dict:
-    """按用户分类统计录音文件"""
-    rec_dir = os.getenv("RECORD_DIR", os.path.join(_DATA_DIR, "recordings"))
-    if not os.path.isdir(rec_dir):
-        return {"total_size": 0, "users": []}
+        # 找端口号
+        port = None
+        for token in cmdline.split("\0"):
+            t = token.strip()
+            if t.isdigit() and 9000 <= int(t) <= 9999:
+                port = int(t)
+                break
 
-    users = []
-    total = 0
-    try:
-        for name in os.listdir(rec_dir):
-            user_dir = os.path.join(rec_dir, name)
-            if not os.path.isdir(user_dir):
-                continue
-            size = _get_dir_size(user_dir)
-            count = len([f for f in os.listdir(user_dir) if os.path.isfile(os.path.join(user_dir, f))])
-            users.append({"user_id": name, "size": size, "count": count})
-            total += size
-    except OSError:
-        pass
-    return {"total_size": total, "users": users}
+        if port is None or port not in _SERVICE_PORTS.values():
+            continue
 
-
-def _get_system_stats() -> dict:
-    """系统资源（容器内）"""
-    stats = {}
-
-    # 内存
-    try:
-        with open("/proc/self/status") as f:
-            for line in f:
+        try:
+            for line in open(f"/proc/{pid}/status"):
                 if line.startswith("VmRSS:"):
-                    # VmRSS: 12345 kB
-                    stats["memory_kb"] = int(line.split()[1])
+                    rss = int(line.split()[1])  # kB
+                    mem_by_port[port] = max(mem_by_port.get(port, 0), rss)
                     break
-    except (OSError, ValueError):
-        stats["memory_kb"] = 0
+        except OSError:
+            continue
 
-    # CPU 负载
-    try:
-        with open("/proc/loadavg") as f:
-            parts = f.read().strip().split()
-            stats["load_1m"] = float(parts[0])
-            stats["load_5m"] = float(parts[1])
-            stats["load_15m"] = float(parts[2])
-    except (OSError, ValueError, IndexError):
-        stats["load_1m"] = 0
-        stats["load_5m"] = 0
-        stats["load_15m"] = 0
-
-    return stats
+    # 端口 → 服务名
+    port_to_name = {v: k for k, v in _SERVICE_PORTS.items()}
+    result = {}
+    for port, kb in mem_by_port.items():
+        result[port_to_name.get(port, f"port_{port}")] = kb
+    return result
 
 
 @router.get("/dashboard/stats")
@@ -102,73 +84,72 @@ async def get_dashboard_stats():
     """汇总监控面板数据"""
     import requests as _req
 
-    db_stat = _get_db_stats()
-    audio_stat = _get_audio_stats()
-    sys_stat = _get_system_stats()
+    # 存储
+    db_path = os.getenv("DB_PATH", os.path.join(_PROJECT_ROOT, "data", "nas_brain.db"))
+    db_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
 
-    # TTS 缓存
-    tts_dir = os.getenv("TTS_CACHE_DIR", os.path.join(_DATA_DIR, "tts_cache"))
+    rec_dir = os.getenv("RECORD_DIR", os.path.join(_PROJECT_ROOT, "data", "recordings"))
+    audio_size = _get_dir_size(rec_dir) if os.path.isdir(rec_dir) else 0
+
+    tts_dir = os.getenv("TTS_CACHE_DIR", os.path.join(_PROJECT_ROOT, "data", "tts_cache"))
     tts_size = _get_dir_size(tts_dir) if os.path.isdir(tts_dir) else 0
 
-    # 日志
-    log_dir = os.getenv("LOG_DIR", os.path.join(_DATA_DIR, "logs"))
+    log_dir = os.getenv("LOG_DIR", os.path.join(_PROJECT_ROOT, "data", "logs"))
     log_size = _get_dir_size(log_dir) if os.path.isdir(log_dir) else 0
 
+    # CPU
+    cpu = {"load_1m": 0, "load_5m": 0, "load_15m": 0}
+    try:
+        with open("/proc/loadavg") as f:
+            parts = f.read().strip().split()
+            cpu = {"load_1m": float(parts[0]), "load_5m": float(parts[1]), "load_15m": float(parts[2])}
+    except (OSError, ValueError, IndexError):
+        pass
+
+    # 各服务内存
+    services_mem = _get_service_memory()
+
     # brain_services 统计
-    brain_stats = {}
-    brain_total_requests = 0
-    brain_total_answers = 0
-    brain_prompt_tokens = 0
-    brain_completion_tokens = 0
-    brain_uptime = 0
+    brain = {"total_requests": 0, "total_answers": 0, "prompt_tokens": 0,
+             "completion_tokens": 0, "total_tokens": 0, "uptime_seconds": 0}
     try:
         resp = _req.get("http://127.0.0.1:9031/api/agent-request/stats", timeout=5)
         if resp.status_code == 200:
-            brain_stats = resp.json()
-            brain_total_requests = brain_stats.get("total_requests", 0)
-            brain_total_answers = brain_stats.get("total_answers", 0)
-            brain_prompt_tokens = brain_stats.get("prompt_tokens", 0)
-            brain_completion_tokens = brain_stats.get("completion_tokens", 0)
-            brain_uptime = brain_stats.get("uptime_seconds", 0)
+            bs = resp.json()
+            brain.update(bs)
+            brain["total_tokens"] = bs.get("prompt_tokens", 0) + bs.get("completion_tokens", 0)
     except Exception as e:
         logger.warning("获取 brain_services 统计失败: %s", e)
 
-    # 活跃用户（从 db_services 读取最近的消息）
+    # 活跃用户
     active_users = {"5min": 0, "1hour": 0, "1day": 0}
     try:
-        resp = _req.get(
-            "http://127.0.0.1:9021/api/chat-messages/active-users",
-            params={"minutes_5": 5, "minutes_60": 60, "minutes_1440": 1440},
-            timeout=5,
-        )
+        resp = _req.get("http://127.0.0.1:9021/api/chat-messages/active-users",
+                        params={"minutes_5": 5, "minutes_60": 60, "minutes_1440": 1440}, timeout=5)
         if resp.status_code == 200:
             active_users = resp.json()
-    except Exception as e:
-        logger.warning("获取活跃用户失败: %s", e)
+    except Exception:
+        pass
+
+    # 每日明细
+    daily = []
+    try:
+        resp = _req.get("http://127.0.0.1:9021/api/request-traces/daily", timeout=5)
+        if resp.status_code == 200:
+            daily = resp.json().get("items", [])
+    except Exception:
+        pass
 
     return {
-        "system": {
-            "memory_kb": sys_stat["memory_kb"],
-            "memory_mb": round(sys_stat["memory_kb"] / 1024, 1) if sys_stat["memory_kb"] else 0,
-            "load_1m": sys_stat["load_1m"],
-            "load_5m": sys_stat["load_5m"],
-            "load_15m": sys_stat["load_15m"],
-        },
+        "system": {"memory_services": services_mem, "cpu": cpu},
         "storage": {
-            "db": db_stat,
-            "audio": audio_stat,
-            "tts_cache_size": tts_size,
-            "log_size": log_size,
+            "db_size": db_size, "audio_size": audio_size,
+            "tts_cache_size": tts_size, "log_size": log_size,
+            "limit": _STORAGE_LIMIT,
         },
-        "brain": {
-            "total_requests": brain_total_requests,
-            "total_answers": brain_total_answers,
-            "prompt_tokens": brain_prompt_tokens,
-            "completion_tokens": brain_completion_tokens,
-            "total_tokens": brain_prompt_tokens + brain_completion_tokens,
-            "uptime_seconds": brain_uptime,
-        },
+        "brain": brain,
         "active_users": active_users,
+        "daily": daily,
     }
 
 
@@ -187,24 +168,22 @@ def _ensure_backup_dir():
 
 @router.post("/backup/create")
 async def create_backup():
-    """打包 data/ 目录到 backup/ 目录"""
     _ensure_backup_dir()
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"nas_brain_backup_{ts}.zip"
     zip_path = _get_backup_path(filename)
+    data_dir = os.path.dirname(os.getenv("DB_PATH", os.path.join(_PROJECT_ROOT, "data", "nas_brain.db")))
 
     try:
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for root, dirs, files in os.walk(_DATA_DIR):
-                # 排除目录
-                rel = os.path.relpath(root, _DATA_DIR)
+            for root, dirs, files in os.walk(data_dir):
+                rel = os.path.relpath(root, data_dir)
                 if rel == ".":
                     dirs[:] = [d for d in dirs if d not in _BACKUP_EXCLUDE_DIRS]
                     continue
                 if rel.split(os.sep)[0] in _BACKUP_EXCLUDE_DIRS:
                     dirs[:] = []
                     continue
-
                 for f in files:
                     fp = os.path.join(root, f)
                     arcname = os.path.relpath(fp, _PROJECT_ROOT)
@@ -220,7 +199,6 @@ async def create_backup():
 
 @router.get("/backup/list")
 async def list_backups():
-    """列出所有备份文件"""
     _ensure_backup_dir()
     items = []
     try:
@@ -228,8 +206,7 @@ async def list_backups():
             fp = os.path.join(_BACKUP_DIR, f)
             if os.path.isfile(fp) and f.endswith(".zip"):
                 items.append({
-                    "filename": f,
-                    "size": os.path.getsize(fp),
+                    "filename": f, "size": os.path.getsize(fp),
                     "created_at": datetime.fromtimestamp(os.path.getmtime(fp)).isoformat(),
                 })
     except OSError:
@@ -239,8 +216,6 @@ async def list_backups():
 
 @router.get("/backup/download/{filename}")
 async def download_backup(filename: str):
-    """下载备份文件"""
-    # 防止路径穿越
     safe_name = os.path.basename(filename)
     if not safe_name.endswith(".zip"):
         raise HTTPException(400, "仅支持 .zip 文件下载")
@@ -252,7 +227,6 @@ async def download_backup(filename: str):
 
 @router.delete("/backup/{filename}")
 async def delete_backup(filename: str):
-    """删除备份文件"""
     safe_name = os.path.basename(filename)
     fp = _get_backup_path(safe_name)
     if not os.path.isfile(fp):

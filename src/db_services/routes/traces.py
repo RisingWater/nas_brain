@@ -182,6 +182,43 @@ def get_trace_stats():
     }
 
 
+@router.get("/daily")
+def get_daily_stats():
+    """按天聚合：请求数、回答数、token 用量、平均耗时"""
+    conn = db.get_connection()
+    rows = conn.execute("""
+        SELECT date(created_at) as day,
+               COUNT(*) as total,
+               SUM(CASE WHEN reply_skip = 0 THEN 1 ELSE 0 END) as answered,
+               stages, metadata
+        FROM request_traces
+        GROUP BY day
+        ORDER BY day DESC
+        LIMIT 30
+    """).fetchall()
+
+    items = []
+    for r in rows:
+        stages = json.loads(r["stages"]) if r["stages"] else {}
+        meta_list = [json.loads(m) if isinstance(m, str) else m for m in r["metadata"]] if False else []
+        timestamps = [v for v in stages.values() if isinstance(v, (int, float))]
+        avg_ms = 0
+        if len(timestamps) >= 2:
+            durs = [max(timestamps) - min(timestamps)]
+            avg_ms = round(sum(durs) / len(durs), 1) if durs else 0
+
+        # Token 估算（从 metadata 无法直接拿到，用 brain 累计值差异推算的话太复杂）
+        # 简单返回每日的请求数、回答数、平均耗时
+        items.append({
+            "date": r["day"],
+            "total": r["total"],
+            "answered": r["answered"],
+            "avg_ms": avg_ms,
+        })
+
+    return {"items": items}
+
+
 @router.get("")
 def list_traces(
     limit: int = Query(50, ge=1, le=200),

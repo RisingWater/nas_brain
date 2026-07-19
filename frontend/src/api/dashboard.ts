@@ -2,17 +2,15 @@ import client from './client';
 
 export interface DashboardStats {
   system: {
-    memory_kb: number;
-    memory_mb: number;
-    load_1m: number;
-    load_5m: number;
-    load_15m: number;
+    memory_services: Record<string, number>;  // 服务名 → KB
+    cpu: { load_1m: number; load_5m: number; load_15m: number };
   };
   storage: {
-    db: { size: number; path: string };
-    audio: { total_size: number; users: { user_id: string; size: number; count: number }[] };
+    db_size: number;
+    audio_size: number;
     tts_cache_size: number;
     log_size: number;
+    limit: number;  // 100GB
   };
   brain: {
     total_requests: number;
@@ -22,11 +20,13 @@ export interface DashboardStats {
     total_tokens: number;
     uptime_seconds: number;
   };
-  active_users: {
-    "5min": number;
-    "1hour": number;
-    "1day": number;
-  };
+  active_users: { "5min": number; "1hour": number; "1day": number };
+  daily: {
+    date: string;
+    total: number;
+    answered: number;
+    avg_ms: number;
+  }[];
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
