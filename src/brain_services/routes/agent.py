@@ -108,20 +108,23 @@ def _process_async(req: AgentRequest):
         response = strategy_engine.process(req)
 
         if not response.data:
-            trace_event(req.request_id, "brain_done", protocol=req.protocol.value, user_id=req.user_id)
+            # 跳过（群聊无 @）或 ignore，不追踪
             return
+
+        # 追踪：实际开始处理
+        trace_event(req.request_id, "brain_receive", protocol=req.protocol.value, user_id=req.user_id)
 
         # 统计 + 追踪
         text = (response.data or {}).get("text", "")
         is_skip = text and text.strip() == "__SKIP__"
         stats.record_request(answered=not is_skip)
 
-        # 非 SKIP 才保留追踪记录（SKIP 的只记 brain_done 时间不记回复）
         if not is_skip:
             trace_event(req.request_id, "brain_done", protocol=req.protocol.value, user_id=req.user_id)
             if text:
                 _trace_reply(req.request_id, reply=text)
         else:
+            # __SKIP__：标记但不保留追踪记录
             _trace_reply(req.request_id, skip=True)
 
         who = req.metadata.get("wechat_name", "")
@@ -153,9 +156,6 @@ async def receive_request(req: AgentRequest):
     """接收 AgentRequest，立即返回，后台异步处理"""
     logger.info("收到请求: id=%s user=%s type=%s content=%.50s",
                 req.request_id, req.user_id, req.content_type.value, req.content or "")
-
-    # 追踪：收到请求
-    trace_event(req.request_id, "brain_receive", protocol=req.protocol.value, user_id=req.user_id)
 
     # 起后台线程处理，不阻塞 HTTP 响应
     threading.Thread(target=_process_async, args=(req,), daemon=True).start()
