@@ -2,15 +2,16 @@ import client from './client';
 
 export interface DashboardStats {
   system: {
-    memory_services: Record<string, number>;  // 服务名 → KB
-    cpu: { load_1m: number; load_5m: number; load_15m: number };
+    memory_services: Record<string, number>;
+    memory_total_kb: number;
+    cpu: { load_1m: number; load_5m: number; load_15m: number; cores: number; pct: number };
   };
   storage: {
     db_size: number;
     audio_size: number;
     tts_cache_size: number;
     log_size: number;
-    limit: number;  // 100GB
+    limit: number;
   };
   brain: {
     total_requests: number;

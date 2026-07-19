@@ -98,12 +98,28 @@ async def get_dashboard_stats():
     log_size = _get_dir_size(log_dir) if os.path.isdir(log_dir) else 0
 
     # CPU
-    cpu = {"load_1m": 0, "load_5m": 0, "load_15m": 0}
+    cpu = {"load_1m": 0, "load_5m": 0, "load_15m": 0, "cores": 1, "pct": 0}
     try:
         with open("/proc/loadavg") as f:
             parts = f.read().strip().split()
-            cpu = {"load_1m": float(parts[0]), "load_5m": float(parts[1]), "load_15m": float(parts[2])}
+            cpu["load_1m"] = float(parts[0])
+            cpu["load_5m"] = float(parts[1])
+            cpu["load_15m"] = float(parts[2])
+        # CPU 核数
+        cpu["cores"] = os.cpu_count() or 1
+        # 近似 CPU 使用率：load_1m / cores * 100
+        cpu["pct"] = min(100, round(cpu["load_1m"] / cpu["cores"] * 100, 1))
     except (OSError, ValueError, IndexError):
+        pass
+
+    # 总内存
+    mem_total_kb = 8 * 1024 * 1024  # 默认 8GB
+    try:
+        for line in open("/proc/meminfo"):
+            if line.startswith("MemTotal:"):
+                mem_total_kb = int(line.split()[1])
+                break
+    except OSError:
         pass
 
     # 各服务内存
@@ -141,7 +157,7 @@ async def get_dashboard_stats():
         pass
 
     return {
-        "system": {"memory_services": services_mem, "cpu": cpu},
+        "system": {"memory_services": services_mem, "memory_total_kb": mem_total_kb, "cpu": cpu},
         "storage": {
             "db_size": db_size, "audio_size": audio_size,
             "tts_cache_size": tts_size, "log_size": log_size,
