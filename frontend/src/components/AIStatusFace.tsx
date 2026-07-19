@@ -124,12 +124,12 @@ export default function AIStatusFace({ state, size = 300 }: AIStatusFaceProps) {
         );
       }
       case 'operating':
-        // 紧抿 — 用力的一条线
+        // 紧抿 — 双横线，咬紧牙关的感觉
         return (
-          <path
-            d="M 38,82 L 62,82"
-            stroke={color} strokeWidth="3.5" fill="none" strokeLinecap="round"
-          />
+          <g>
+            <path d="M 38,80 L 62,80" stroke={color} strokeWidth="3" fill="none" strokeLinecap="round" />
+            <path d="M 42,85 L 58,85" stroke={color} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+          </g>
         );
       case 'speaking': {
         // 说话动画：开合
