@@ -111,7 +111,7 @@ def _process_async(req: AgentRequest):
 
         response = strategy_engine.process(req)
 
-        if not response.data:
+        if not response.data or response.data.get("skipped") or response.data.get("ignored"):
             # 跳过（群聊无 @）或 ignore，不追踪
             ai_status.set("idle")
             return
