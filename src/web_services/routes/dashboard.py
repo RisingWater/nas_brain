@@ -97,7 +97,7 @@ async def get_dashboard_stats():
     log_dir = os.getenv("LOG_DIR", os.path.join(_PROJECT_ROOT, "data", "logs"))
     log_size = _get_dir_size(log_dir) if os.path.isdir(log_dir) else 0
 
-    # CPU
+    # CPU 使用率（从 /proc/stat 读取）
     cpu = {"load_1m": 0, "load_5m": 0, "load_15m": 0, "cores": 1, "pct": 0}
     try:
         with open("/proc/loadavg") as f:
@@ -105,12 +105,34 @@ async def get_dashboard_stats():
             cpu["load_1m"] = float(parts[0])
             cpu["load_5m"] = float(parts[1])
             cpu["load_15m"] = float(parts[2])
-        # CPU 核数
         cpu["cores"] = os.cpu_count() or 1
-        # 近似 CPU 使用率：load_1m / cores * 100
-        cpu["pct"] = min(100, round(cpu["load_1m"] / cpu["cores"] * 100, 1))
-    except (OSError, ValueError, IndexError):
-        pass
+
+        # 从 /proc/stat 计算实际 CPU 使用率（两次读取，间隔 0.3 秒）
+        import asyncio
+
+        def _read_cpu_stat():
+            with open("/proc/stat") as f:
+                return f.readline()
+
+        line1 = await asyncio.to_thread(_read_cpu_stat)
+        await asyncio.sleep(0.3)
+        line2 = await asyncio.to_thread(_read_cpu_stat)
+
+        def _parse_cpu(line: str) -> tuple[int, int]:
+            # user+nice+system+idle (+ iowait+irq+softirq+steal)
+            fields = [int(v) for v in line.strip().split()[1:]]
+            total = sum(fields)
+            idle = fields[3]  # idle
+            return total, idle
+
+        t1, i1 = _parse_cpu(line1)
+        t2, i2 = _parse_cpu(line2)
+        total_delta = t2 - t1
+        idle_delta = i2 - i1
+        if total_delta > 0:
+            cpu["pct"] = round((1 - idle_delta / total_delta) * 100, 1)
+    except (OSError, ValueError, IndexError, Exception) as e:
+        logger.warning("CPU 统计失败: %s", e)
 
     # 总内存
     mem_total_kb = 8 * 1024 * 1024  # 默认 8GB
