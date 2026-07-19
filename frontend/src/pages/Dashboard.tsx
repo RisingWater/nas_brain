@@ -244,34 +244,32 @@ export default function Dashboard() {
       </Row>
 
       {/* ===== Token 用量 ===== */}
-      {s.brain.total_tokens > 0 && (
-        <Card size="small" style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, justifyContent: 'space-between' }}>
-            <Title level={5} style={{ margin: 0 }}><RobotOutlined /> Token 用量</Title>
-            <Button type="link" icon={<FileTextOutlined />}
-              href="https://www.deepseek.com" target="_blank" style={{ fontSize: 12 }}>
-              DeepSeek 定价详情
-            </Button>
-          </div>
-          <Row gutter={12}>
-            <Col xs={12} sm={6} md={4}>
-              <Card size="small"><Statistic title="Prompt" value={s.brain.prompt_tokens.toLocaleString()} valueStyle={{ fontSize: 20 }} /></Card>
-            </Col>
-            <Col xs={12} sm={6} md={4}>
-              <Card size="small"><Statistic title="Completion" value={s.brain.completion_tokens.toLocaleString()} valueStyle={{ fontSize: 20 }} /></Card>
-            </Col>
-            <Col xs={12} sm={6} md={4}>
-              <Card size="small"><Statistic title="总计" value={s.brain.total_tokens.toLocaleString()} valueStyle={{ fontSize: 20, color: '#1677ff' }} /></Card>
-            </Col>
-            <Col xs={12} sm={6} md={4}>
-              <Card size="small"><Statistic title="总请求" value={s.brain.total_requests} valueStyle={{ fontSize: 20 }} /></Card>
-            </Col>
-            <Col xs={12} sm={6} md={4}>
-              <Card size="small"><Statistic title="有效回答" value={s.brain.total_answers} valueStyle={{ fontSize: 20 }} /></Card>
-            </Col>
-          </Row>
-        </Card>
-      )}
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, justifyContent: 'space-between' }}>
+          <Title level={5} style={{ margin: 0 }}><RobotOutlined /> Token 用量</Title>
+          <Button type="link" icon={<FileTextOutlined />}
+            href="https://www.deepseek.com" target="_blank" style={{ fontSize: 12 }}>
+            DeepSeek 定价详情
+          </Button>
+        </div>
+        <Row gutter={12}>
+          <Col xs={12} sm={6} md={4}>
+            <Card size="small"><Statistic title="Prompt" value={s.brain.prompt_tokens.toLocaleString()} valueStyle={{ fontSize: 20 }} /></Card>
+          </Col>
+          <Col xs={12} sm={6} md={4}>
+            <Card size="small"><Statistic title="Completion" value={s.brain.completion_tokens.toLocaleString()} valueStyle={{ fontSize: 20 }} /></Card>
+          </Col>
+          <Col xs={12} sm={6} md={4}>
+            <Card size="small"><Statistic title="总计" value={s.brain.total_tokens.toLocaleString()} valueStyle={{ fontSize: 20, color: '#1677ff' }} /></Card>
+          </Col>
+          <Col xs={12} sm={6} md={4}>
+            <Card size="small"><Statistic title="总请求" value={s.brain.total_requests} valueStyle={{ fontSize: 20 }} /></Card>
+          </Col>
+          <Col xs={12} sm={6} md={4}>
+            <Card size="small"><Statistic title="有效回答" value={s.brain.total_answers} valueStyle={{ fontSize: 20 }} /></Card>
+          </Col>
+        </Row>
+      </Card>
 
       {/* ===== 柱状图：每日请求/回答、耗时 ===== */}
       {hasDailyData && (
@@ -309,10 +307,10 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* 无追踪数据时的提示 */}
+      {/* 无每日数据时的说明 */}
       {!hasDailyData && (
         <Card size="small" style={{ marginBottom: 16 }}>
-          <Text type="secondary">暂无请求追踪数据。发送一条消息后，这里会显示每日请求/回答和耗时的柱状图。</Text>
+          <Text type="secondary">以上统计为累计值。发送消息后，每日请求/回答和耗时的柱状图会在这里显示。</Text>
         </Card>
       )}
     </div>
