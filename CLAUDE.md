@@ -215,6 +215,32 @@ cfg.get_service_url("voice_gateway", "/api/voice/speak")
 - 处理完成后主动推送到 wechat_gateway 或 voice_gateway
 - 避免长时间阻塞 HTTP 请求
 
+## AI 状态系统
+
+`src/brain_services/status.py` — 全局单例状态管理器，线程安全。
+
+### 五种状态
+
+| 状态 | 含义 | 谁设置 |
+|------|------|--------|
+| `idle` | 空闲 | agent.py（处理完）、speak.py（播完） |
+| `listening` | 聆听中 | voice_gateway processor.py（VAD 开始） |
+| `thinking` | 思考中 | engine.py（LLM 调用前）、voice processor.py（发往 brain） |
+| `operating` | 操作中 | llm_handler.py（工具调用时） |
+| `speaking` | 说话中 | agent.py（回复就绪）、speak.py（TTS 播放时） |
+
+### API
+
+- `GET /api/status` — 获取当前状态
+- `POST /api/status/set` — 设置状态（JSON: `{"state": "...", "speaker": ""}`）
+- 前端通过 `web_services` 代理：`/api/admin/ai-status`
+
+### 前端组件
+
+- `frontend/src/components/AIStatusFace.tsx` — SVG 表情组件，5 种状态各有不同眼/眉/嘴形 + 颜色动画
+- `frontend/src/pages/AIStatusPage.tsx` — 独立全屏页面，`?debug=1` 显示测试按钮
+- 路由 `/ai-status`（独立于管理后台布局）
+
 ## 关键端口
 
 | 服务 | 端口 | 状态 |
