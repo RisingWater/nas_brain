@@ -109,21 +109,24 @@ def _process_async(req: AgentRequest):
         # 状态：思考中
         ai_status.set("thinking")
 
+        # 先记录追踪（含 user_id/content），确保 brain_receive 是第一个事件
+        logger.info("追踪 %s user=%s content=%.30s", req.request_id[:12], req.user_id, req.content or "")
+        trace_event(req.request_id, "brain_receive", protocol=req.protocol.value,
+                    user_id=req.user_id, metadata={"content": req.content or ""})
+
         response = strategy_engine.process(req)
 
         if not response.data or response.data.get("skipped") or response.data.get("ignored"):
             # 跳过（群聊无 @）或 ignore，不追踪
-            logger.info("请求 %s 跳过追踪: skipped=%s ignored=%s",
-                        req.request_id[:12],
-                        response.data.get("skipped") if response.data else '?',
-                        response.data.get("ignored") if response.data else '?')
+            logger.info("请求 %s 跳过，清理追踪", req.request_id[:12])
+            try:
+                import requests as _tdel
+                from src.common.utils import cfg as _tcfg
+                _tdel.delete(_tcfg.get_service_url("db_services", f"/api/request-traces/{req.request_id}"), timeout=3)
+            except Exception:
+                pass
             ai_status.set("idle")
             return
-
-        # 追踪：实际开始处理（含请求内容）
-        logger.info("追踪 %s user=%s content=%.30s", req.request_id[:12], req.user_id, req.content or "")
-        trace_event(req.request_id, "brain_receive", protocol=req.protocol.value,
-                    user_id=req.user_id, metadata={"content": req.content or ""})
 
         # 统计 + 追踪
         text = (response.data or {}).get("text", "")
