@@ -113,10 +113,15 @@ def _process_async(req: AgentRequest):
 
         if not response.data or response.data.get("skipped") or response.data.get("ignored"):
             # 跳过（群聊无 @）或 ignore，不追踪
+            logger.info("请求 %s 跳过追踪: skipped=%s ignored=%s",
+                        req.request_id[:12],
+                        response.data.get("skipped") if response.data else '?',
+                        response.data.get("ignored") if response.data else '?')
             ai_status.set("idle")
             return
 
         # 追踪：实际开始处理（含请求内容）
+        logger.info("追踪 %s user=%s content=%.30s", req.request_id[:12], req.user_id, req.content or "")
         trace_event(req.request_id, "brain_receive", protocol=req.protocol.value,
                     user_id=req.user_id, metadata={"content": req.content or ""})
 

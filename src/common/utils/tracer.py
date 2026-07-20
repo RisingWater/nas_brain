@@ -23,10 +23,10 @@ def _get_url() -> str:
 
 def trace_event(request_id: str, stage: str, metadata: dict | None = None,
                 protocol: str = "", user_id: str = ""):
-    """记录一个追踪事件（异步、静默失败）"""
+    """记录一个追踪事件（静默失败）"""
     try:
         import requests as _req
-        _req.post(
+        resp = _req.post(
             f"{_get_url()}/event",
             json={
                 "request_id": request_id,
@@ -37,8 +37,10 @@ def trace_event(request_id: str, stage: str, metadata: dict | None = None,
             },
             timeout=3,
         )
-    except Exception:
-        pass  # 静默失败，不影响主流程
+        if resp.status_code >= 400:
+            logger.warning("trace_event %s/%s 返回 %s: %s", request_id[:12], stage, resp.status_code, resp.text[:200])
+    except Exception as e:
+        logger.warning("trace_event %s/%s 异常: %s", request_id[:12], stage, e)
 
 
 def trace_content(request_id: str, content: str):
