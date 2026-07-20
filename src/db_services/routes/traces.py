@@ -76,8 +76,14 @@ def record_trace_event(event: TraceEvent):
             metadata["protocol"] = event.protocol
 
         conn.execute(
-            "UPDATE request_traces SET stages = ?, metadata = ?, protocol = COALESCE(NULLIF(?, ''), protocol) WHERE id = ?",
-            (json.dumps(stages), json.dumps(metadata), event.protocol, existing["id"]),
+            """UPDATE request_traces SET stages = ?, metadata = ?,
+               protocol = COALESCE(NULLIF(?, ''), protocol),
+               user_id = COALESCE(NULLIF(?, ''), user_id),
+               content = COALESCE(NULLIF(?, ''), content)
+               WHERE id = ?""",
+            (json.dumps(stages), json.dumps(metadata), event.protocol,
+             event.user_id, event.metadata.get("content", ""),
+             existing["id"]),
         )
     else:
         stages = {event.stage: now_ms} if event.stage else {}
