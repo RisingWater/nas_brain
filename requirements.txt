@@ -6,6 +6,9 @@ pydantic
 python-multipart
 python-dotenv
 
+# === System ===
+psutil
+
 # === Image/Doc ===
 opencv-python
 numpy
