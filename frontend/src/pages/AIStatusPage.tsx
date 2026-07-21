@@ -48,6 +48,8 @@ export default function AIStatusPage() {
   const [debugState, setDebugState] = useState<AIFaceState | null>(null);
   const [idleTipIndex, setIdleTipIndex] = useState(0);
 
+  const faceState: AIFaceState = debugState ?? (status?.state as AIFaceState) ?? 'idle';
+
   const fetchStatus = useCallback(async () => {
     try {
       const data = await getAIStatus();
@@ -90,8 +92,6 @@ export default function AIStatusPage() {
     }, 6000);
     return () => clearInterval(timer);
   }, [faceState]);
-
-  const faceState: AIFaceState = debugState ?? (status?.state as AIFaceState) ?? 'idle';
   const curSpeaker = status?.speaker ?? '';
   const curDuration = status?.duration ?? 0;
   const uptime = (status?.extra?.uptime_seconds as number) || 0;
