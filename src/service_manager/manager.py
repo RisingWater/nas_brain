@@ -28,11 +28,13 @@ def _find_project_root() -> str:
 class ServiceInfo:
     """单个服务的运行时信息"""
 
-    def __init__(self, name: str, command: str, description: str = "", enable: bool = True):
+    def __init__(self, name: str, command: str, description: str = "",
+                 enable: bool = True, depends_on: list[str] | None = None):
         self.name = name
         self.command = command
         self.description = description
         self.enable = enable
+        self.depends_on = depends_on or []
         self.process: Optional[subprocess.Popen] = None
         self.pid: Optional[int] = None
         self._lock = threading.Lock()
@@ -54,6 +56,7 @@ class ServiceInfo:
             "command": self.command,
             "description": self.description,
             "enable": self.enable,
+            "depends_on": self.depends_on,
             "status": self.status,
             "pid": self.process.pid if self.process and self.process.poll() is None else None,
         }
@@ -81,6 +84,7 @@ class ServiceManager:
                 command=entry["command"],
                 description=entry.get("description", ""),
                 enable=entry.get("enable", True),
+                depends_on=entry.get("depends_on", []),
             )
             self._services[svc.name] = svc
 
@@ -94,10 +98,30 @@ class ServiceManager:
     # ---- 启停 ----
 
     def start_all(self):
-        """启动所有开启的服务"""
-        for svc in self._services.values():
-            if svc.enable:
-                self._start_one(svc)
+        """按依赖顺序启动所有开启的服务"""
+        enabled = {n: s for n, s in self._services.items() if s.enable}
+        # 拓扑排序
+        order: list[str] = []
+        visited = set()
+        def _dfs(name: str, path: set):
+            if name in visited:
+                return
+            if name in path:
+                raise RuntimeError(f"服务依赖循环: {' → '.join(path | {name})}")
+            path.add(name)
+            svc = enabled.get(name)
+            if svc:
+                for dep in svc.depends_on:
+                    _dfs(dep, path)
+                visited.add(name)
+                order.append(name)
+            path.remove(name)
+        for name in enabled:
+            _dfs(name, set())
+        logger.info("服务启动顺序: %s", ' → '.join(order))
+        for name in order:
+            logger.info("启动服务: %s", name)
+            self._start_one(enabled[name])
 
     def stop_all(self):
         """停止所有服务"""
@@ -149,6 +173,7 @@ class ServiceManager:
                 "description": svc.description,
                 "command": svc.command,
                 "enable": svc.enable,
+                "depends_on": svc.depends_on,
             })
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(entries, f, ensure_ascii=False, indent=2)

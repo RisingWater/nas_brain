@@ -36,7 +36,13 @@ class KVStore:
             logger.warning("KV delete 失败 (%s): %s", key, e)
 
     def exists(self, key: str) -> bool:
-        return self.get(key) is not None
+        """判断 key 是否存在。连接失败时返回 True（避免重复操作）"""
+        try:
+            resp = requests.get(f"{_KV_BASE}/{key}", timeout=5)
+            return resp.status_code == 200
+        except Exception as e:
+            logger.warning("KV exists 失败 (%s): %s，保守返回 True", key, e)
+            return True
 
 
 # 全局单例
