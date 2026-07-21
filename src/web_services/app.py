@@ -473,8 +473,11 @@ async def proxy_ai_status(request: Request):
 
 # ---- WebSocket：AI 状态实时推送 ----
 from .ws_manager import ws_endpoint, notify_state_change
+from fastapi import WebSocket
 
-app.add_websocket_route("/api/admin/ai-status/ws", ws_endpoint)
+@app.websocket("/api/admin/ai-status/ws")
+async def ai_status_ws(websocket: WebSocket):
+    await ws_endpoint(websocket)
 
 
 @app.post("/api/admin/ai-status/notify")
