@@ -20,11 +20,11 @@ def set_processor(proc):
     _processor = proc
 
 
-def _set_ai_status(state: str, speaker: str = "", **extra):
+def _set_ai_status(state: str, speaker: str = "", message: str = "", **extra):
     """通过 brain_services 设置 AI 状态"""
     try:
         url = cfg.get_service_url("brain_services", "/api/status/set")
-        _req.post(url, json={"state": state, "speaker": speaker, "extra": extra}, timeout=5)
+        _req.post(url, json={"state": state, "speaker": speaker, "message": message, "extra": extra}, timeout=5)
     except Exception as e:
         logger.debug("设置状态失败: %s", e)
 
@@ -46,8 +46,8 @@ async def speak(req: SpeakRequest):
     if not _processor:
         raise HTTPException(503, "语音处理器未就绪")
     try:
-        # 状态：说话中
-        _set_ai_status("speaking")
+        # 状态：说话中（带文字内容）
+        _set_ai_status("speaking", message=req.text[:80])
         from src.common.utils.tracer import trace_event as _trace_event
         await asyncio.to_thread(_processor.play_sync, req.text, req.request_id)
         if req.request_id:
