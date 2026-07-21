@@ -74,7 +74,7 @@ export default function AIStatusPage() {
   if (loading) {
     return (
       <div style={{
-        width: '100vw', height: '100vh',
+        position: 'fixed', inset: 0,
         display: 'flex', justifyContent: 'center', alignItems: 'center',
         background: '#0a0a0f',
       }}>
@@ -85,15 +85,14 @@ export default function AIStatusPage() {
 
   return (
     <div style={{
-      width: '100vw',
-      height: '100vh',
+      position: 'fixed',
+      inset: 0,
       background: 'radial-gradient(ellipse at center, #14141f 0%, #0a0a0f 100%)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
-      position: 'relative',
       userSelect: 'none',
     }}>
       {/* Top bar */}
