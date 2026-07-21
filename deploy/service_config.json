@@ -45,7 +45,7 @@
     "name": "voice_gateway",
     "description": "语音网关（唤醒词 + 语音播放互斥）",
     "command": "python -m uvicorn src.gateways.voice.app:app --host 0.0.0.0 --port 9050",
-    "enable": false,
-    "depends_on": ["db_services"]
+    "enable": true,
+    "depends_on": ["db_services", "brain_services"]
   }
 ]
