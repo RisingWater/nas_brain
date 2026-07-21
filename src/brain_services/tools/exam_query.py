@@ -12,6 +12,7 @@ class ListExamsTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="list_exams",
+            display_name="列出考试",
             description="列出乔宝（王煜乔）最近的考试列表。调用此工具获取考试ID后，再用 get_exam_scores 查询具体分数。必须先调此工具。",
             parameters={
                 "type": "object",
@@ -41,6 +42,7 @@ class GetExamScoresTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="get_exam_scores",
+            display_name="查询成绩",
             description="查询指定考试的各科成绩。可同时传入多个考试ID。考试ID需先通过 list_exams 获取。",
             parameters={
                 "type": "object",

@@ -107,7 +107,8 @@ def _process_async(req: AgentRequest):
     """后台处理：策略引擎处理 → 推送回复到 gateway"""
     try:
         # 状态：思考中
-        ai_status.set("thinking")
+        who = req.metadata.get("wechat_name", "") or req.user_id
+        ai_status.set("thinking", message=f"收到 {who} 的消息")
 
         # 先记录追踪（含 user_id/content），确保 brain_receive 是第一个事件
         logger.info("追踪 %s user=%s content=%.30s", req.request_id[:12], req.user_id, req.content or "")
@@ -143,7 +144,7 @@ def _process_async(req: AgentRequest):
             if text:
                 _trace_reply(req.request_id, reply=text)
             # 状态：说话中（准备/正在输出回复）
-            ai_status.set("speaking")
+            ai_status.set("speaking", message=text[:80] if text else "")
         else:
             # __SKIP__：标记但不保留追踪记录
             _trace_reply(req.request_id, skip=True)

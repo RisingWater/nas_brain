@@ -68,6 +68,7 @@ class ListAcTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="list_ac",
+            display_name="查看空调",
             description="列出家中所有空调的名称、当前状态（开关/模式）和设定温度。",
             parameters={"type": "object", "properties": {}, "required": []},
             silent=True,
@@ -86,6 +87,7 @@ class ControlAcTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="control_ac",
+            display_name="控制空调",
             description="控制指定的空调。必须先调 list_ac 获取空调名称。name 必填。支持开关、设置温度、切换模式。",
             parameters={
                 "type": "object",

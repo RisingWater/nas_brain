@@ -11,6 +11,7 @@
   语音:   idle → listening → thinking → operating → speaking → idle
   Web/微信: idle → thinking → operating → speaking → idle
 """
+import os
 import time
 import threading
 from typing import Optional
@@ -35,18 +36,32 @@ class AIStatus:
         self._state: str = "idle"
         self._changed_at: float = time.time()
         self._speaker: str = ""
+        self._message: str = ""
         self._extra: dict = {}
 
-    def set(self, state: str, speaker: str = "", **extra):
-        """设置状态，附带可选的说话人信息和额外数据"""
+    def set(self, state: str, speaker: str = "", message: str = "", **extra):
+        """设置状态，附带可选的说话人信息、上下文文字和额外数据"""
         assert state in STATES, f"无效状态: {state}"
         with self._lock:
             self._state = state
             self._changed_at = time.time()
             if speaker:
                 self._speaker = speaker
+            self._message = message  # 每次 set 更新上下文文字（传空字符串清空）
             if extra:
                 self._extra.update(extra)
+        # fire-and-forget 通知 web_services，不阻塞调用方
+        threading.Thread(target=self._notify_web, daemon=True).start()
+
+    def _notify_web(self):
+        """异步通知 web_services 状态变更"""
+        try:
+            import requests as _req
+            port = os.getenv("WEB_SERVICE_PORT", "9020")
+            url = f"http://127.0.0.1:{port}/api/admin/ai-status/notify"
+            _req.post(url, json=self.get(), timeout=2)
+        except Exception:
+            pass  # 静默失败，不影响主流程
 
     def get(self) -> dict:
         with self._lock:
@@ -65,6 +80,7 @@ class AIStatus:
                 "changed_at": self._changed_at,
                 "duration": round(time.time() - self._changed_at, 1),
                 "speaker": self._speaker,
+                "message": self._message,
                 "extra": extra,
             }
 

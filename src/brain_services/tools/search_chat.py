@@ -14,6 +14,7 @@ class SearchChatHistoryTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="search_chat_history",
+            display_name="搜索记录",
             description=(
                 "搜索历史聊天记录，查找之前讨论过的内容。"
                 "当用户问'我之前说过…'、'昨天…'、'上次你说…'、"

@@ -67,6 +67,7 @@ class WeatherTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="get_weather",
+            display_name="查询天气",
             description="查询指定城市今天或明天的天气。返回温度范围、天气状况、降水时段。",
             parameters={
                 "type": "object",

@@ -13,6 +13,7 @@ class SendWechatTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="send_wechat",
+            display_name="发送微信",
             description="向指定微信用户或群发送消息。当你需要主动推送信息时调用。",
             parameters={
                 "type": "object",

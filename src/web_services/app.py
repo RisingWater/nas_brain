@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from .routes import users, logs, dashboard
+import asyncio
 
 app = FastAPI(title="管理后端微服务", version="1.0.0")
 
@@ -32,7 +33,6 @@ async def health():
 
 
 # ---- 代理 /api/services → service_manager:9022 ----
-import asyncio
 import requests as _req
 
 
@@ -469,6 +469,20 @@ async def proxy_agent_request(request: Request):
 async def proxy_ai_status(request: Request):
     path = "/api/status/set" if request.method == "POST" else "/api/status"
     return await _proxy_to_brain(path, request)
+
+
+# ---- WebSocket：AI 状态实时推送 ----
+from .ws_manager import ws_endpoint, notify_state_change
+
+app.add_websocket_route("/api/admin/ai-status/ws", ws_endpoint)
+
+
+@app.post("/api/admin/ai-status/notify")
+async def notify_ai_status(request: Request):
+    """brain_services 状态变更时回调此端点，广播给所有 WebSocket 客户端"""
+    data = await request.json()
+    await notify_state_change(data)
+    return {"success": True}
 
 
 # 静态文件 — 前端构建产物

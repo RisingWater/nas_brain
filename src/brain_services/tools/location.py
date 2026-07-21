@@ -15,6 +15,7 @@ class YuqiaoLocationTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="get_yuqiao_location",
+            display_name="获取位置",
             description=(
                 "查询煜乔（乔宝）的当前位置。返回设备名称、电量和详细地址。"
                 "同时会生成一张地图位置图片，agent route 会根据请求来源决定是否发送。"
@@ -60,6 +61,7 @@ class YuqiaoPowerTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="get_yuqiao_power",
+            display_name="查询电量",
             description="查询煜乔的通话器剩余电量，返回电量百分比。",
             parameters={"type": "object", "properties": {}, "required": []},
         )

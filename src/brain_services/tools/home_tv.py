@@ -44,6 +44,7 @@ class GetTvStateTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="get_tv_state",
+            display_name="查看电视",
             description="查询电视当前状态（打开/音响模式/关闭）。",
             parameters={"type": "object", "properties": {}, "required": []},
             silent=True,
@@ -63,6 +64,7 @@ class ControlTvTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="control_tv",
+            display_name="控制电视",
             description="控制小米电视。开=退出音响模式，关=进入音响模式。调用前先调 get_tv_state。",
             parameters={
                 "type": "object",

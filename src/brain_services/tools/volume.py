@@ -46,6 +46,7 @@ class GetVolumeTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="get_volume",
+            display_name="获取音量",
             description="获取当前扬声器音量百分比。",
             parameters={"type": "object", "properties": {}, "required": []},
             silent=True,
@@ -63,6 +64,7 @@ class SetVolumeTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="set_volume",
+            display_name="设置音量",
             description="设置扬声器音量。参数为百分比数字，如 50 表示 50%。",
             parameters={
                 "type": "object",

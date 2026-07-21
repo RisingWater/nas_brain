@@ -39,6 +39,7 @@ class ReadMemoryTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="read_memory",
+            display_name="读取记忆",
             description="读取长期记忆，获取已知的用户偏好、身份、房间归属等信息。",
             parameters={
                 "type": "object",
@@ -56,6 +57,7 @@ class SaveMemoryTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="save_memory",
+            display_name="保存记忆",
             description="向长期记忆追加一条新信息。当了解到用户的新偏好、身份、房间设备归属等时使用。每条记忆一行。",
             parameters={
                 "type": "object",

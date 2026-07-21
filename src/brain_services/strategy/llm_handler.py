@@ -85,14 +85,17 @@ class LLMHandler:
             final_text = ""
 
             # 状态：操作中（有工具调用）
-            ai_status.set("operating")
-
             # 逐个执行工具
             for tc in tool_calls:
                 if tc.get("type") != "function":
                     continue
                 func = tc.get("function", {})
                 tool_name = func.get("name", "")
+
+                # 状态：操作中
+                tool_obj = tool_registry.get(tool_name)
+                disp_name = tool_obj.display_name if tool_obj else tool_name
+                ai_status.set("operating", message=f"正在调用 {disp_name}")
 
                 # 追踪：工具调用开始
                 if request_id:

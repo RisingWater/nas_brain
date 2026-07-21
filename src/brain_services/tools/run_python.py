@@ -18,6 +18,7 @@ class RunPythonTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="run_python",
+            display_name="运行Python",
             description="运行一段 Python 代码，返回执行结果（stdout）。代码中可以读写 TEMP_DIR 目录下的文件来持久化数据。支持生成图片、图表等文件，文件会通过微信发送给用户。",
             parameters={
                 "type": "object",

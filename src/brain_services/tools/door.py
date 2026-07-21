@@ -11,6 +11,7 @@ class DoorTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="open_door",
+            display_name="开门禁",
             description="打开楼下门禁。调用后会自动打开单元楼的楼下门禁。",
             parameters={"type": "object", "properties": {}, "required": []},
             silent=True, final=True,

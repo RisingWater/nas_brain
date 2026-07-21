@@ -9,8 +9,9 @@ class BaseTool:
     """工具基类。子类需实现 execute(args) → str。"""
 
     def __init__(self, name: str, description: str, parameters: dict,
-                 silent: bool = False, final: bool = False):
+                 display_name: str = "", silent: bool = False, final: bool = False):
         self.name = name
+        self.display_name = display_name or name  # 无中文名则 fallback 到英文
         self.description = description
         self.silent = silent
         self.final = final
@@ -38,6 +39,7 @@ class BaseTool:
     def to_dict(self) -> dict:
         return {
             "name": self.name,
+            "display_name": self.display_name,
             "description": self.description,
             "silent": self.silent,
             "final": self.final,

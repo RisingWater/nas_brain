@@ -42,6 +42,7 @@ class WriteTextFileTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="write_text_file",
+            display_name="写文本文件",
             description="将文本内容保存为 txt 文件。可用于保存报告、清单、摘要等较长的文本，文件会通过微信发送给用户。",
             parameters={
                 "type": "object",
@@ -88,6 +89,7 @@ class WritePdfFileTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="write_pdf_file",
+            display_name="写PDF文件",
             description="将文本内容保存为 PDF 文件。可用于保存正式文档、报告等。",
             parameters={
                 "type": "object",
@@ -158,6 +160,7 @@ class ReadTextFileTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="read_text_file",
+            display_name="读文本文件",
             description="读取 TEMP_DIR 内的文本文件内容。可用于读取之前保存的报告、笔记等。注意：只能读取 TEMP_DIR 目录下的文件。",
             parameters={
                 "type": "object",
@@ -195,6 +198,7 @@ class ReadPdfFileTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="read_pdf_file",
+            display_name="读PDF文件",
             description="读取 TEMP_DIR 内的 PDF 文件内容（提取文字）。注意：只能读取 TEMP_DIR 目录下的文件。",
             parameters={
                 "type": "object",

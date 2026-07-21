@@ -11,6 +11,7 @@ class WebSearchTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="web_search",
+            display_name="搜索网页",
             description="仅用于查询最新时效性信息：新闻、实时数据、近期事件。常识、历史、科学、编程等知识类问题不要调用。",
             parameters={
                 "type": "object",

@@ -47,6 +47,9 @@ export default function ToolManager() {
     { title: '工具名', dataIndex: 'name', key: 'name', width: 140,
       render: (name: string) => <Text code>{name}</Text>,
     },
+    { title: '中文名', dataIndex: 'display_name', key: 'display_name', width: 100,
+      render: (v: string) => v || '-',
+    },
     { title: '描述', dataIndex: 'description', key: 'description', width: 300 },
     {
       title: '参数', key: 'params', width: 200, responsive: ['lg' as const],

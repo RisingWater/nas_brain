@@ -34,6 +34,7 @@ class AddReminderTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="add_reminder",
+            display_name="添加提醒",
             description=(
                 "添加一个定时提醒。支持一次性、每天、每月。"
                 "时间格式：一次性='2026-07-09 21:00'，每天='21:00'，每月='15 21:00'（15号21点）。"
@@ -87,6 +88,7 @@ class ListRemindersTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="list_reminders",
+            display_name="列出提醒",
             description="列出所有未完成的定时提醒。",
             parameters={"type": "object", "properties": {}, "required": []},
             silent=True,
@@ -114,6 +116,7 @@ class DeleteReminderTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="delete_reminder",
+            display_name="删除提醒",
             description="删除一个定时提醒。",
             parameters={
                 "type": "object",

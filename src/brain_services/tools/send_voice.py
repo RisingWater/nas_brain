@@ -13,6 +13,7 @@ class SendVoiceTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="send_voice",
+            display_name="语音播报",
             description="通过语音播放一段文字。当你需要让 AI 说话时调用。",
             parameters={
                 "type": "object",

@@ -11,6 +11,7 @@ class WebFetchTool(BaseTool):
     def __init__(self):
         super().__init__(
             name="web_fetch",
+            display_name="抓取网页",
             description="获取指定 URL 的网页内容并总结。适用于查看文章、文档、公告等在线内容。注意：仅用于获取已知 URL，不要用于搜索。",
             parameters={
                 "type": "object",

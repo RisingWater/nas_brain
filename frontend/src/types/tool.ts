@@ -1,5 +1,6 @@
 export interface ToolInfo {
   name: string;
+  display_name: string;
   description: string;
   silent: boolean;
   final: boolean;

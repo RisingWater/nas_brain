@@ -12,6 +12,7 @@ router = APIRouter()
 class StatusSetRequest(BaseModel):
     state: str = Field(..., description="状态值")
     speaker: str = Field("", description="说话人")
+    message: str = Field("", description="上下文文字")
     extra: dict = Field(default_factory=dict, description="额外数据")
 
 
@@ -26,6 +27,6 @@ def set_status(req: StatusSetRequest):
     """设置 AI 状态（供其他服务调用）"""
     if req.state not in STATES:
         raise HTTPException(400, f"无效状态，可选: {', '.join(STATES)}")
-    ai_status.set(req.state, speaker=req.speaker, **req.extra)
-    logger.info("状态 → %s (speaker=%s)", req.state, req.speaker)
+    ai_status.set(req.state, speaker=req.speaker, message=req.message, **req.extra)
+    logger.info("状态 → %s (speaker=%s, message=%.30s)", req.state, req.speaker, req.message)
     return {"success": True, "state": req.state}

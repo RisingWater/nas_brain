@@ -49,7 +49,7 @@ class ControlPs5Tool(BaseTool):
     def __init__(self):
         super().__init__(
             name="control_ps5",
-            description="控制 PS5 游戏机开关。开=退出音响模式→开PS5→等3秒→切HDMI 1。关=关PS5→电视进音响模式。",
+            display_name="控制PS5",
             parameters={
                 "type": "object",
                 "properties": {

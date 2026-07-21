@@ -5,7 +5,7 @@ import {
   ArrowLeftOutlined,
 } from '@ant-design/icons';
 import AIStatusFace, { type AIFaceState } from '../components/AIStatusFace';
-import { getAIStatus, setAIStatus } from '../api/status';
+import { getAIStatus, setAIStatus, connectAIStatusWS } from '../api/status';
 import type { AIStatus } from '../api/status';
 
 // Check URL for debug mode
@@ -28,10 +28,25 @@ const STATE_DESCRIPTIONS: Record<AIFaceState, string> = {
   speaking: '正在输出回复',
 };
 
+// 空闲时轮流显示的小提示
+const IDLE_TIPS = [
+  '💡 试试对我说 "今天天气怎么样？"',
+  '🔍 我可以帮你查资料、搜网页',
+  '🎵 说 "播放一些音乐" 来听歌',
+  '📝 我可以帮你记录备忘录',
+  '🔌 我可以控制家里的智能设备',
+  '⏰ 说 "提醒我半小时后关火" 设置提醒',
+  '📚 我可以帮你查考试成绩',
+  '🗣️ 在群里 @我 也能和我对话',
+  '🎯 我会记住你说过的重要信息',
+  '⚡ 唤醒我说 "你好乔宝" 开始对话',
+];
+
 export default function AIStatusPage() {
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [debugState, setDebugState] = useState<AIFaceState | null>(null);
+  const [idleTipIndex, setIdleTipIndex] = useState(0);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -45,10 +60,36 @@ export default function AIStatusPage() {
   }, []);
 
   useEffect(() => {
+    // WebSocket 实时推送（主通道）
+    const closeWS = connectAIStatusWS(
+      (data) => {
+        setStatus(data);
+        setLoading(false);
+      },
+      () => {
+        // WebSocket 断开，依赖轮询兜底
+        console.log('AI Status WebSocket 断开，回退到轮询');
+      },
+    );
+
+    // 初始获取 + 5s 轮询兜底
     fetchStatus();
-    const timer = setInterval(fetchStatus, 1500);
-    return () => clearInterval(timer);
+    const timer = setInterval(fetchStatus, 5000);
+
+    return () => {
+      closeWS();
+      clearInterval(timer);
+    };
   }, [fetchStatus]);
+
+  // 空闲时轮流显示小提示
+  useEffect(() => {
+    if (faceState !== 'idle') return;
+    const timer = setInterval(() => {
+      setIdleTipIndex((i) => (i + 1) % IDLE_TIPS.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [faceState]);
 
   const faceState: AIFaceState = debugState ?? (status?.state as AIFaceState) ?? 'idle';
   const curSpeaker = status?.speaker ?? '';
@@ -144,6 +185,35 @@ export default function AIStatusPage() {
         }}>
           {STATE_DESCRIPTIONS[faceState]}
         </div>
+        {/* 上下文文字 / 空闲小提示 */}
+        {faceState === 'idle' ? (
+          <div style={{
+            marginTop: 6,
+            fontSize: 13,
+            color: 'rgba(255,255,255,0.2)',
+            textAlign: 'center',
+            maxWidth: 320,
+            lineHeight: 1.6,
+            transition: 'all 0.5s ease',
+            animation: 'fadeInOut 6s ease infinite',
+          }}>
+            {IDLE_TIPS[idleTipIndex]}
+          </div>
+        ) : status?.message ? (
+          <div style={{
+            marginTop: 10,
+            fontSize: 15,
+            color: curStateInfo.color,
+            opacity: 0.7,
+            textAlign: 'center',
+            maxWidth: 360,
+            lineHeight: 1.5,
+            textShadow: `0 0 10px ${curStateInfo.color}30`,
+            transition: 'all 0.3s ease',
+          }}>
+            {status.message}
+          </div>
+        ) : null}
       </div>
 <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
