@@ -98,30 +98,55 @@ class ServiceManager:
     # ---- 启停 ----
 
     def start_all(self):
-        """按依赖顺序启动所有开启的服务"""
+        """按依赖分层启动所有开启的服务
+
+        同一层并行启动，层间间隔 3 秒等待依赖服务就绪。
+        """
         enabled = {n: s for n, s in self._services.items() if s.enable}
-        # 拓扑排序
-        order: list[str] = []
-        visited = set()
-        def _dfs(name: str, path: set):
-            if name in visited:
-                return
+
+        # 计算每层的依赖深度（最长路径）
+        depth: dict[str, int] = {}
+        def _calc_depth(name: str, path: set) -> int:
+            if name in depth:
+                return depth[name]
             if name in path:
                 raise RuntimeError(f"服务依赖循环: {' → '.join(path | {name})}")
             path.add(name)
             svc = enabled.get(name)
-            if svc:
+            if not svc:
+                path.remove(name)
+                return 0
+            max_dep = 0
+            if svc.depends_on:
                 for dep in svc.depends_on:
-                    _dfs(dep, path)
-                visited.add(name)
-                order.append(name)
+                    max_dep = max(max_dep, _calc_depth(dep, path) + 1)
+            depth[name] = max_dep
             path.remove(name)
+            return max_dep
+
         for name in enabled:
-            _dfs(name, set())
-        logger.info("服务启动顺序: %s", ' → '.join(order))
-        for name in order:
-            logger.info("启动服务: %s", name)
-            self._start_one(enabled[name])
+            _calc_depth(name, set())
+
+        # 按深度分组
+        levels: dict[int, list[str]] = {}
+        for name, d in depth.items():
+            levels.setdefault(d, []).append(name)
+
+        for level in sorted(levels.keys()):
+            batch = levels[level]
+            logger.info("启动第 %d 层: %s (%d 个服务)", level, batch, len(batch))
+            threads = []
+            for name in batch:
+                svc = enabled[name]
+                t = threading.Thread(target=self._start_one, args=(svc,), daemon=True)
+                t.start()
+                threads.append(t)
+            for t in threads:
+                t.join()
+            # 每层启动后等 3 秒，让服务就绪
+            if level < max(levels.keys()):
+                logger.info("等待 3 秒让服务就绪...")
+                time.sleep(3)
 
     def stop_all(self):
         """停止所有服务"""
