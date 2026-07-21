@@ -39,7 +39,7 @@ class VoiceprintEngine:
         if not self._pipeline:
             raise RuntimeError("声纹模型未加载")
         try:
-            result = self._pipeline([wav_path, wav_path], output_emb=True)
+            result = self._pipeline([wav_path], output_emb=True)
             emb = result["embs"][0]
             return np.array(emb, dtype=np.float32)
         except Exception as e:

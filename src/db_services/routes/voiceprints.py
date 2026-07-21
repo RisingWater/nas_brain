@@ -18,6 +18,9 @@ _KV_THRESHOLD_KEY = "voiceprint_threshold"
 _DEFAULT_THRESHOLD = 0.5
 _TEMP_USER_ID = "u_temp_voice"
 
+# 全局声纹缓存：[(id, user_id, np.ndarray), ...]，避免每次检测都读 DB 反序列化
+_vp_cache: list[tuple[int, str, np.ndarray]] = []
+
 
 def _init_table():
     conn = db.get_connection()
@@ -52,6 +55,17 @@ def _ensure_temp_user():
 
 
 _ensure_temp_user()
+
+
+def _rebuild_cache():
+    """从 DB 重建声纹缓存"""
+    global _vp_cache
+    conn = db.get_connection()
+    rows = conn.execute("SELECT id, user_id, vector FROM voiceprints").fetchall()
+    _vp_cache = [(r["id"], r["user_id"], np.frombuffer(r["vector"], dtype=np.float32)) for r in rows]
+
+
+_rebuild_cache()
 
 
 def _row_to_dict(row) -> dict:
@@ -102,9 +116,12 @@ def set_threshold(body: dict):
 
 
 # ---- 注册 ----
+_AUTO_MAX_COUNT = 100  # 自动注册声纹上限
+
+
 @router.post("/enroll", status_code=201)
 def enroll_voiceprint(req: VoiceprintEnrollRequest):
-    """注册声纹"""
+    """注册声纹，自动注册超 100 条时清理最旧的"""
     conn = db.get_connection()
     vec_bytes = _serialize_vector(req.vector)
     try:
@@ -112,8 +129,33 @@ def enroll_voiceprint(req: VoiceprintEnrollRequest):
             "INSERT INTO voiceprints (user_id, vector, audio_path, vp_type) VALUES (?, ?, ?, ?)",
             (req.user_id, vec_bytes, req.audio_path, req.vp_type),
         )
+        new_id = cursor.lastrowid
+
+        # 自动注册超上限时清理最旧的 auto 声纹
+        if req.vp_type == "auto":
+            count = conn.execute(
+                "SELECT COUNT(*) FROM voiceprints WHERE user_id = ? AND vp_type = 'auto'",
+                (req.user_id,),
+            ).fetchone()[0]
+            if count > _AUTO_MAX_COUNT:
+                # 保留最近的 _AUTO_MAX_COUNT 条，删更旧的
+                keep_ids = conn.execute(
+                    """SELECT id FROM voiceprints WHERE user_id = ? AND vp_type = 'auto'
+                       ORDER BY id DESC LIMIT ?""",
+                    (req.user_id, _AUTO_MAX_COUNT),
+                ).fetchall()
+                keep_set = set(r[0] for r in keep_ids)
+                conn.execute(
+                    """DELETE FROM voiceprints WHERE user_id = ? AND vp_type = 'auto'
+                       AND id NOT IN ({})""".format(
+                        ",".join("?" * len(keep_set))
+                    ),
+                    (req.user_id, *keep_set),
+                )
+
         conn.commit()
-        return {"success": True, "id": cursor.lastrowid}
+        _rebuild_cache()
+        return {"success": True, "id": new_id}
     except Exception as e:
         raise HTTPException(400, f"注册失败: {e}")
 
@@ -144,6 +186,7 @@ async def upload_voiceprint(user_id: str = Form(...), file: UploadFile = File(..
             (user_id, vec_bytes, filepath, "manual"),
         )
         conn.commit()
+        _rebuild_cache()
         return {"success": True, "id": cursor.lastrowid, "audio_path": filepath}
     except Exception as e:
         # 清理已保存的文件
@@ -218,6 +261,7 @@ def move_voiceprint(vp_id: int, target_user_id: str = Query(...)):
     conn.execute("UPDATE voiceprints SET user_id = ?, audio_path = ? WHERE id = ?",
                  (target_user_id, new_audio_path, vp_id))
     conn.commit()
+    _rebuild_cache()
     return {"success": True, "id": vp_id, "target_user_id": target_user_id, "audio_path": new_audio_path}
 
 
@@ -237,6 +281,7 @@ def delete_voiceprint(vp_id: int):
             pass
     conn.execute("DELETE FROM voiceprints WHERE id = ?", (vp_id,))
     conn.commit()
+    _rebuild_cache()
     return {"success": True, "id": vp_id}
 
 
@@ -255,24 +300,21 @@ def get_voiceprint_audio(vp_id: int):
 # ---- 检测 ----
 @router.post("/detect")
 def detect_voiceprint(req: VoiceprintDetectRequest):
-    """上传向量，返回匹配结果"""
-    conn = db.get_connection()
-    rows = conn.execute("SELECT * FROM voiceprints").fetchall()
-    if not rows:
+    """上传向量，返回匹配结果（使用内存缓存）"""
+    if not _vp_cache:
         return VoiceprintDetectResponse(users=[])
 
     query_vec = np.array(req.vector, dtype=np.float32)
     threshold = _DEFAULT_THRESHOLD
+    conn = db.get_connection()
     row = conn.execute("SELECT value FROM kv_store WHERE key = ?", (_KV_THRESHOLD_KEY,)).fetchone()
     if row:
         threshold = float(row[0])
 
-    # 按用户分组计算平均相似度
+    # 按用户分组计算平均相似度（全内存，无 DB 反序列化）
     user_sims: dict[str, list[float]] = {}
-    for r in rows:
-        stored = np.frombuffer(r["vector"], dtype=np.float32)
+    for _id, uid, stored in _vp_cache:
         sim = _cosine_similarity(query_vec, stored)
-        uid = r["user_id"]
         if uid not in user_sims:
             user_sims[uid] = []
         user_sims[uid].append(sim)
