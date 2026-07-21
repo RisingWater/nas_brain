@@ -41,6 +41,7 @@ class DsmDetector(BaseDetector):
 
     def __init__(self):
         super().__init__()
+        self._interval = self.interval  # 初始化间隔
         self._dsmxp = None  # 懒加载
         self._restore_timer = None
 
