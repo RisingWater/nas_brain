@@ -201,7 +201,7 @@ class VoiceProcessor:
         """通过 brain_services 设置 AI 状态"""
         try:
             url = cfg.get_service_url("brain_services", "/api/status/set")
-            requests.post(url, json={"state": state, "speaker": speaker, "message": message, "extra": extra}, timeout=5)
+            requests.post(url, json={"state": state, "speaker": speaker, "message": message, "extra": extra}, timeout=0.2)
         except Exception as e:
             logger.debug("设置状态失败: %s", e)
 
@@ -209,14 +209,17 @@ class VoiceProcessor:
         """VAD 录音 → 声纹 → STT → brain_services → TTS"""
         request_id = f"voice_{uuid.uuid4().hex[:12]}"
 
-        # 状态：聆听中
-        self._set_ai_status("listening")
-
-        # 追踪：唤醒记录起始
         from src.common.utils.tracer import trace_event as _trace_event, trace_content as _trace_content
-        _trace_event(request_id, "wakeword", protocol="voice")
 
-        # VAD 录音
+        # 后台发状态 + 追踪（不阻塞录音）
+        def _http_setup():
+            self._set_ai_status("listening")
+            _trace_event(request_id, "wakeword", protocol="voice")
+
+        http_thread = threading.Thread(target=_http_setup, daemon=True)
+        http_thread.start()
+
+        # 立即开始 VAD 录音（与 HTTP 并行）
         self.set_state(STATE_RECORDING)
         try:
             silence_ms = self._get_vad_silence()
@@ -225,6 +228,9 @@ class VoiceProcessor:
             logger.error("VAD 录音失败: %s", e)
             self.set_state(STATE_IDLE)
             return
+
+        # 等待后台 HTTP 完成（确保 record_end 在 wakeword 之后）
+        http_thread.join(timeout=3)
         _trace_event(request_id, "record_end")
 
         self.set_state(STATE_PROCESSING)
