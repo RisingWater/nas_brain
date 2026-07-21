@@ -10,6 +10,7 @@ import type { AIStatus } from '../api/status';
 
 // Check URL for debug mode
 const isDebug = new URLSearchParams(window.location.search).has('debug');
+const rotateDeg = parseInt(new URLSearchParams(window.location.search).get('rotate') || '0', 10);
 
 const STATES: { key: AIFaceState; label: string; color: string }[] = [
   { key: 'idle', label: '空闲', color: '#7ec8e3' },
@@ -83,7 +84,7 @@ export default function AIStatusPage() {
     );
   }
 
-  return (
+  const pageContent = (
     <div style={{
       position: 'fixed',
       inset: 0,
@@ -95,7 +96,6 @@ export default function AIStatusPage() {
       overflow: 'hidden',
       userSelect: 'none',
     }}>
-      {/* Top bar */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -114,9 +114,7 @@ export default function AIStatusPage() {
           NAS Brain
         </span>
       </div>
-
-      {/* Face */}
-      <div style={{
+<div style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
@@ -147,9 +145,7 @@ export default function AIStatusPage() {
           {STATE_DESCRIPTIONS[faceState]}
         </div>
       </div>
-
-      {/* Bottom info bar */}
-      <div style={{
+<div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         display: 'flex', justifyContent: 'center', gap: 24,
         padding: '20px 24px',
@@ -210,4 +206,19 @@ export default function AIStatusPage() {
       )}
     </div>
   );
+
+  return rotateDeg ? (
+    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden' }}>
+      <div style={{
+        position: 'absolute',
+        width: '100vh',
+        height: '100vw',
+        top: '50%',
+        left: '50%',
+        transform: `translate(-50%, -50%) rotate(${rotateDeg}deg)`,
+      }}>
+        {pageContent}
+      </div>
+    </div>
+  ) : pageContent;
 }
