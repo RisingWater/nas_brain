@@ -108,7 +108,7 @@ def _process_async(req: AgentRequest):
     try:
         # 状态：思考中
         who = req.metadata.get("wechat_name", "") or req.user_id
-        ai_status.set("thinking", message=f"收到 {who} 的消息")
+        ai_status.set("thinking", message=req.content[:80] if req.content else "")
 
         # 先记录追踪（含 user_id/content），确保 brain_receive 是第一个事件
         logger.info("追踪 %s user=%s content=%.30s", req.request_id[:12], req.user_id, req.content or "")
