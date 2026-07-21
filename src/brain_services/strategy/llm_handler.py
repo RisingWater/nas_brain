@@ -155,7 +155,7 @@ class LLMHandler:
 
             # 工具执行完毕，回到思考状态
             if not has_final:
-                ai_status.set("thinking")
+                ai_status.set("thinking", message="正在准备答复措辞")
 
             if has_final:
                 # 清理上下文中孤立的 tool_calls（final 工具不会添加 tool response）
