@@ -39,7 +39,7 @@ const IDLE_TIPS = [
   '📚 我可以帮你查考试成绩',
   '🗣️ 在群里 @我 也能和我对话',
   '🎯 我会记住你说过的重要信息',
-  '⚡ 唤醒我说 "你好乔宝" 开始对话',
+  '⚡ 连续说两次 "派蒙" 唤醒我即可对话',
 ];
 
 export default function AIStatusPage() {
@@ -189,10 +189,11 @@ export default function AIStatusPage() {
         {faceState === 'idle' ? (
           <div style={{
             marginTop: 6,
-            fontSize: 13,
-            color: 'rgba(255,255,255,0.2)',
+            fontSize: 20,
+            color: curStateInfo.color,
+            opacity: 0.5,
             textAlign: 'center',
-            maxWidth: 320,
+            maxWidth: 400,
             lineHeight: 1.6,
             transition: 'all 0.5s ease',
             animation: 'fadeInOut 6s ease infinite',
@@ -202,11 +203,11 @@ export default function AIStatusPage() {
         ) : status?.message ? (
           <div style={{
             marginTop: 10,
-            fontSize: 15,
+            fontSize: 20,
             color: curStateInfo.color,
             opacity: 0.7,
             textAlign: 'center',
-            maxWidth: 360,
+            maxWidth: 400,
             lineHeight: 1.5,
             textShadow: `0 0 10px ${curStateInfo.color}30`,
             transition: 'all 0.3s ease',
