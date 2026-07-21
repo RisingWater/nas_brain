@@ -93,6 +93,8 @@ class LogManager:
             uvicorn_logger.addHandler(file_handler)
             uvicorn_logger.addHandler(mem_handler)
             uvicorn_logger.propagate = False
+        # 访问日志太吵（AI 状态每 5s 轮询），只保留 WARNING+
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
         # ===== 控制台输出（可选，通过环境变量控制） =====
         if os.getenv("LOG_CONSOLE", "true").lower() == "true":
