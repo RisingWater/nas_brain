@@ -7,20 +7,6 @@
     "depends_on": []
   },
   {
-    "name": "web_services",
-    "description": "管理后端微服务",
-    "command": "python -m uvicorn src.web_services.app:app --host 0.0.0.0 --port 9020",
-    "enable": true,
-    "depends_on": ["db_services"]
-  },
-  {
-    "name": "wechat_gateway",
-    "description": "微信消息网关",
-    "command": "python -m uvicorn src.gateways.wechat.app:app --host 0.0.0.0 --port 9030",
-    "enable": true,
-    "depends_on": ["db_services"]
-  },
-  {
     "name": "brain_services",
     "description": "大脑微服务",
     "command": "python -m uvicorn src.brain_services.app:app --host 0.0.0.0 --port 9031",
@@ -32,14 +18,28 @@
     "description": "音频播放微服务",
     "command": "python -m uvicorn src.playback_services.app:app --host 0.0.0.0 --port 9041",
     "enable": true,
-    "depends_on": []
+    "depends_on": ["db_services"]
   },
   {
     "name": "schedule_services",
     "description": "定时任务微服务",
     "command": "python -m uvicorn src.schedule_services.app:app --host 0.0.0.0 --port 9040",
     "enable": true,
-    "depends_on": ["db_services"]
+    "depends_on": ["db_services", "brain_services"]
+  },
+  {
+    "name": "wechat_gateway",
+    "description": "微信消息网关",
+    "command": "python -m uvicorn src.gateways.wechat.app:app --host 0.0.0.0 --port 9030",
+    "enable": true,
+    "depends_on": ["db_services", "brain_services"]
+  },
+  {
+    "name": "web_services",
+    "description": "管理后端微服务",
+    "command": "python -m uvicorn src.web_services.app:app --host 0.0.0.0 --port 9020",
+    "enable": true,
+    "depends_on": ["db_services", "brain_services"]
   },
   {
     "name": "voice_gateway",
