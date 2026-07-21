@@ -140,8 +140,8 @@ class StrategyEngine:
             all_tools, config.get("allowed_tools"),
         )
 
-        # 状态：思考中
-        ai_status.set("thinking")
+        # 状态：思考中（agent.py 已设，此处确保有内容）
+        ai_status.set("thinking", message=req.content[:80] if req.content else "")
 
         # 执行 LLM 循环
         reply, files, req_tokens = self.llm_handler.handle(

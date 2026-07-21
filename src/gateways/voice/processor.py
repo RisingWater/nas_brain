@@ -197,11 +197,11 @@ class VoiceProcessor:
 
     # ---- VAD + 声纹 + STT + brain_services 管线 ----
 
-    def _set_ai_status(self, state: str, speaker: str = "", **extra):
+    def _set_ai_status(self, state: str, speaker: str = "", message: str = "", **extra):
         """通过 brain_services 设置 AI 状态"""
         try:
             url = cfg.get_service_url("brain_services", "/api/status/set")
-            requests.post(url, json={"state": state, "speaker": speaker, "extra": extra}, timeout=5)
+            requests.post(url, json={"state": state, "speaker": speaker, "message": message, "extra": extra}, timeout=5)
         except Exception as e:
             logger.debug("设置状态失败: %s", e)
 
@@ -260,7 +260,7 @@ class VoiceProcessor:
         _trace_content(request_id, text)
 
         # 状态：思考中
-        self._set_ai_status("thinking", speaker=speaker)
+        self._set_ai_status("thinking", speaker=speaker, message=text[:80])
 
         # POST brain_services（异步处理，真实回复会通过 _send_voice_text 推送回来）
         try:
