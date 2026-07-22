@@ -75,14 +75,35 @@ class VoiceProcessor:
         vad_close()
 
     def play_sync(self, text: str, request_id: str = ""):
-        """同步播放语音：仅 HTTP 调 TTS 合成，不涉及音频设备，不加锁。"""
+        """同步播放语音：HTTP 调 TTS 合成 + 获取 WAV 数据，直接用 play_wav 播放。"""
         logger.warning(f"play_sync 开始播放 {text}")
+        from src.common.utils.tracer import trace_event as _trace_event
         try:
-            from src.common.utils.tracer import trace_event as _trace_event
             url = cfg.get_service_url("playback_services", "/api/speak/play")
-            resp = requests.post(url, json={"text": text, "sync": True, "request_id": request_id}, timeout=60)
+            resp = requests.post(url, json={"text": text, "voice": "", "use_cache": True}, timeout=60)
             if resp.status_code != 200:
                 logger.warning(f"TTS 返回 {resp.status_code}: {resp.text}")
+                return
+
+            body = resp.json()
+            data = body.get("data", {})
+            sample_rate = data.get("sample_rate", 24000)
+
+            if "file_path" in data:
+                # 单机模式：读临时文件
+                with open(data["file_path"], "rb") as f:
+                    wav_data = f.read()
+                try:
+                    os.unlink(data["file_path"])
+                except Exception:
+                    pass
+                self.play_wav(wav_data, sample_rate)
+            elif "wav_base64" in data:
+                # 多机模式：base64 解码
+                import base64 as _b64
+                wav_data = _b64.b64decode(data["wav_base64"])
+                self.play_wav(wav_data, sample_rate)
+
             if request_id:
                 _trace_event(request_id, "tts_end")
         except Exception as e:

@@ -2,6 +2,7 @@
 import base64
 import logging
 import requests as _req
+import tempfile
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
@@ -63,7 +64,7 @@ async def synthesize(req: SynthesizeRequest):
 
 @router.post("/play")
 async def play(req: PlayRequest):
-    """合成文本并通过 voice_gateway 播放"""
+    """合成文本并返回 WAV 数据（不回调 voice_gateway，由调用方自行播放）"""
     if not engine.is_ready:
         raise HTTPException(503, "TTS 引擎未就绪（TTS_URL 未配置）")
 
@@ -72,25 +73,24 @@ async def play(req: PlayRequest):
     if result is None:
         raise HTTPException(502, "语音合成失败")
 
+    wav_data = result["data"]
     sample_rate = 24000  # Edge TTS 默认 24kHz
-    rid = req.request_id or ""
-    if req.sync:
-        ok = _play_via_voice_gateway(result["data"], sample_rate, rid)
-        return {
-            "code": 200 if ok else 502,
-            "data": {"from_cache": result["from_cache"]},
-            "message": "播放完成" if ok else "播放失败",
-        }
-    else:
-        logger.warning("异步播放")
-        import threading
-        threading.Thread(
-            target=_play_via_voice_gateway,
-            args=(result["data"], sample_rate, rid),
-            daemon=True,
-        ).start()
+
+    if cfg.SINGLETON:
+        # 单机模式：保存到临时文件，返回路径
+        tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        tmp.write(wav_data)
+        tmp.close()
         return {
             "code": 200,
-            "data": {"from_cache": result["from_cache"]},
-            "message": "正在播放",
+            "data": {"file_path": tmp.name, "sample_rate": sample_rate, "from_cache": result["from_cache"]},
+            "message": "ok",
+        }
+    else:
+        # 多机模式：base64 编码返回
+        encoded = base64.b64encode(wav_data).decode("ascii")
+        return {
+            "code": 200,
+            "data": {"wav_base64": encoded, "sample_rate": sample_rate, "from_cache": result["from_cache"]},
+            "message": "ok",
         }
