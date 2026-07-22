@@ -93,7 +93,7 @@ class VoiceProcessor:
         return [s.strip() for s in sentences if s.strip()]
 
     def _play_audio(self, wav_data: bytes, sample_rate: int = 24000):
-        """pyaudio 播放，分块写入避免缓冲溢出 + 异常安全清理"""
+        """pyaudio 播放，异常安全清理"""
         import pyaudio as _pa
         pa = _pa.PyAudio()
         stream = None
@@ -102,16 +102,7 @@ class VoiceProcessor:
                 format=_pa.paInt16, channels=1, rate=sample_rate,
                 output=True,
             )
-            # 分块写入，每块约 1 秒，防止 PortAudio 环形缓冲溢出
-            chunk_frames = sample_rate  # 1 秒
-            chunk_bytes = chunk_frames * 2  # 16bit mono
-            offset = 0
-            while offset < len(wav_data):
-                chunk = wav_data[offset:offset + chunk_bytes]
-                if not chunk:
-                    break
-                stream.write(chunk)
-                offset += chunk_bytes
+            stream.write(wav_data)
         finally:
             if stream:
                 stream.stop_stream()
@@ -131,6 +122,7 @@ class VoiceProcessor:
 
             play_queue: queue.Queue = queue.Queue()
             done_event = threading.Event()
+            logger.info("共 %d 句，开始流水线播放", len(sentences))
 
             # 消费者线程：逐条出队播放
             def _consumer():
@@ -139,24 +131,31 @@ class VoiceProcessor:
                     if item is None:
                         break
                     wav, sr = item
+                    dur = len(wav) / sr / 2  # 16bit mono
+                    logger.warning("播放音频 %.1fs", dur)
+                    t0 = time.time()
                     try:
                         self._play_audio(wav, sr)
                     except Exception as e:
                         logger.error("音频播放失败: %s", e)
+                    logger.warning("播放结束 耗时%.2fs", time.time() - t0)
                 done_event.set()
 
             consumer = threading.Thread(target=_consumer, daemon=True)
             consumer.start()
 
             # 生产者：逐句 TTS 合成，放入队列
-            for sentence in sentences:
+            for idx, sentence in enumerate(sentences):
+                logger.info("TTS 第%d句: %.40s", idx + 1, sentence)
                 try:
                     url = cfg.get_service_url("playback_services", "/api/speak/play")
+                    t0 = time.time()
                     resp = requests.post(
                         url, json={"text": sentence, "voice": "", "use_cache": True}, timeout=60,
                     )
+                    t_tts = time.time() - t0
                     if resp.status_code != 200:
-                        logger.warning("TTS 返回 %s: %s", resp.status_code, resp.text)
+                        logger.warning("TTS 第%d句返回 %s: %s", idx + 1, resp.status_code, resp.text)
                         continue
                     body = resp.json()
                     data = body.get("data", {})
@@ -169,11 +168,14 @@ class VoiceProcessor:
                             os.unlink(data["file_path"])
                         except Exception:
                             pass
-                        play_queue.put((wav_data, sr))
                     elif "wav_base64" in data:
                         import base64 as _b64
                         wav_data = _b64.b64decode(data["wav_base64"])
-                        play_queue.put((wav_data, sr))
+                    else:
+                        continue
+                    dur = len(wav_data) / sr / 2
+                    logger.info("TTS 第%d句完成 耗时%.1fs 音频%.1fs", idx + 1, t_tts, dur)
+                    play_queue.put((wav_data, sr))
                 except Exception as e:
                     logger.error("TTS 合成失败: %s", e)
 
