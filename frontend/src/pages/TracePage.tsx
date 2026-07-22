@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Table, Tag, Typography, Card, Descriptions, Spin, Button, Space, Divider, Progress, Modal, message } from 'antd';
+import { useEffect, useState, useMemo } from 'react';
+import { Table, Tag, Typography, Card, Descriptions, Spin, Button, Space, Divider, Progress, Modal, message, Select } from 'antd';
 import { ArrowLeftOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { listTraces, getTrace, deleteTrace } from '../api/traces';
 import type { TraceItem } from '../api/traces';
@@ -172,12 +172,35 @@ export default function TracePage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [filterProtocol, setFilterProtocol] = useState<string | undefined>(undefined);
+  const [filterUser, setFilterUser] = useState<string | undefined>(undefined);
   const pageSize = 20;
+
+  // 从已加载的追踪记录中提取唯一用户
+  const userOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { value: string; label: string }[] = [];
+    for (const item of items) {
+      const uid = item.user_id || '';
+      const name = item.user_name || uid;
+      if (uid && !seen.has(uid)) {
+        seen.add(uid);
+        options.push({ value: uid, label: name });
+      }
+    }
+    return options;
+  }, [items]);
 
   const fetchList = async (p: number) => {
     setLoading(true);
     try {
-      const data = await listTraces({ limit: pageSize, offset: (p - 1) * pageSize, skip_skip: false });
+      const data = await listTraces({
+        limit: pageSize,
+        offset: (p - 1) * pageSize,
+        protocol: filterProtocol,
+        user_id: filterUser,
+        skip_skip: false,
+      });
       setItems(data.items);
       setTotal(data.total);
     } catch {
@@ -186,6 +209,13 @@ export default function TracePage() {
       setLoading(false);
     }
   };
+
+  // 筛选或翻页时重新加载
+  useEffect(() => {
+    setPage(1);
+  }, [filterProtocol, filterUser]);
+
+  useEffect(() => { fetchList(page); }, [page, filterProtocol, filterUser]);
 
   const handleDelete = (requestId: string) => {
     Modal.confirm({
@@ -205,8 +235,6 @@ export default function TracePage() {
       },
     });
   };
-
-  useEffect(() => { fetchList(page); }, [page]);
 
   if (detailId) {
     return <TraceDetail requestId={detailId} onBack={() => setDetailId(null)} onDelete={handleDelete} />;
@@ -282,8 +310,32 @@ export default function TracePage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
         <Text type="secondary">共 {total} 条追踪记录</Text>
+        <Select
+          allowClear
+          placeholder="筛选协议"
+          style={{ width: 120 }}
+          value={filterProtocol}
+          onChange={setFilterProtocol}
+          options={[
+            { value: 'voice', label: '语音' },
+            { value: 'wechat', label: '微信' },
+            { value: 'web', label: 'Web' },
+          ]}
+        />
+        <Select
+          allowClear
+          showSearch
+          placeholder="筛选用户"
+          style={{ width: 150 }}
+          value={filterUser}
+          onChange={setFilterUser}
+          options={userOptions}
+          filterOption={(input, option) =>
+            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+          }
+        />
       </div>
       <Table
         dataSource={items}

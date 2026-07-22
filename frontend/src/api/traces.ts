@@ -30,6 +30,7 @@ export async function listTraces(params?: {
   limit?: number;
   offset?: number;
   protocol?: string;
+  user_id?: string;
   skip_skip?: boolean;
 }): Promise<{ total: number; items: TraceItem[] }> {
   const res = await client.get('/admin/request-traces/list', { params });

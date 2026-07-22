@@ -240,6 +240,7 @@ def list_traces(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     protocol: str = Query(None),
+    user_id: str = Query(None, description="按用户 ID 筛选"),
     skip_skip: bool = Query(False, description="过滤掉 SKIP 的记录"),
 ):
     """分页列出追踪记录"""
@@ -247,10 +248,13 @@ def list_traces(
     conditions = []
     params = []
     if protocol:
-        conditions.append("protocol = ?")
+        conditions.append("t.protocol = ?")
         params.append(protocol)
+    if user_id:
+        conditions.append("t.user_id = ?")
+        params.append(user_id)
     if skip_skip:
-        conditions.append("reply_skip = 0")
+        conditions.append("t.reply_skip = 0")
     where = " AND ".join(conditions) if conditions else "1=1"
 
     total = conn.execute(f"SELECT COUNT(*) FROM request_traces WHERE {where}", params).fetchone()[0]
