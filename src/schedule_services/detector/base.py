@@ -22,12 +22,12 @@ class DetectorContext:
             logger.error("微信发送失败 -> %s: %s", who, e)
 
     def speak_voice(self, text: str):
-        """语音播报 → playback_services"""
+        """语音播报 → voice_gateway（统一走 speak 端点到 play_sync）"""
         import requests
         from src.common.utils import cfg
-        url = cfg.get_service_url("playback_services", "/api/speak/play")
+        url = cfg.get_service_url("voice_gateway", "/api/voice/speak")
         try:
-            resp = requests.post(url, json={"text": text, "sync": False}, timeout=30)
+            resp = requests.post(url, json={"text": text}, timeout=120)
             resp.raise_for_status()
             logger.info("语音已播报: %.30s", text)
         except Exception as e:

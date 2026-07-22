@@ -121,6 +121,27 @@ async def proxy_tools_schemas(request: Request):
     return await _proxy_to_brain("/api/tools/schemas", request)
 
 
+# ---- 代理 /api/voice → voice_gateway:9050 ----
+async def _proxy_to_voice(path: str, request: Request) -> JSONResponse:
+    qs = request.url.query
+    url = f"http://127.0.0.1:9050{path}"
+    if qs:
+        url += f"?{qs}"
+    body = await request.body()
+    headers = {k: v for k, v in request.headers.items()
+               if k.lower() not in ("host", "content-length")}
+    try:
+        resp = await asyncio.to_thread(
+            _req.request, request.method, url, data=body, headers=headers, timeout=120,
+        )
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+    except Exception as e:
+        return JSONResponse(
+            content={"code": 502, "message": f"voice_gateway 不可用: {e}", "data": None},
+            status_code=502,
+        )
+
+
 # ---- 代理 /api/speak → playback_services:9041 ----
 async def _proxy_to_playback(path: str, request: Request) -> JSONResponse:
     qs = request.url.query
@@ -154,7 +175,7 @@ async def proxy_speak_synthesize(request: Request):
 
 @app.api_route("/api/speak/play", methods=["POST"])
 async def proxy_speak_play(request: Request):
-    return await _proxy_to_playback("/api/speak/play", request)
+    return await _proxy_to_voice("/api/voice/speak", request)
 
 
 @app.api_route("/api/tts/cache", methods=["GET"])
