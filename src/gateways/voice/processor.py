@@ -93,17 +93,30 @@ class VoiceProcessor:
         return [s.strip() for s in sentences if s.strip()]
 
     def _play_audio(self, wav_data: bytes, sample_rate: int = 24000):
-        """纯 pyaudio 播放，不涉及状态管理"""
+        """pyaudio 播放，分块写入避免缓冲溢出 + 异常安全清理"""
         import pyaudio as _pa
         pa = _pa.PyAudio()
-        stream = pa.open(
-            format=_pa.paInt16, channels=1, rate=sample_rate,
-            output=True,
-        )
-        stream.write(wav_data)
-        stream.stop_stream()
-        stream.close()
-        pa.terminate()
+        stream = None
+        try:
+            stream = pa.open(
+                format=_pa.paInt16, channels=1, rate=sample_rate,
+                output=True,
+            )
+            # 分块写入，每块约 1 秒，防止 PortAudio 环形缓冲溢出
+            chunk_frames = sample_rate  # 1 秒
+            chunk_bytes = chunk_frames * 2  # 16bit mono
+            offset = 0
+            while offset < len(wav_data):
+                chunk = wav_data[offset:offset + chunk_bytes]
+                if not chunk:
+                    break
+                stream.write(chunk)
+                offset += chunk_bytes
+        finally:
+            if stream:
+                stream.stop_stream()
+                stream.close()
+            pa.terminate()
 
     def play_sync(self, text: str, request_id: str = ""):
         """同步播放语音：拆句 → 逐句 TTS → 边合成边播放。全程 STATE_PLAYING。"""
