@@ -93,23 +93,14 @@ class VoiceProcessor:
         return [s.strip() for s in sentences if s.strip()]
 
     def _play_audio(self, wav_data: bytes, sample_rate: int = 24000):
-        """纯 pyaudio 播放，分块写入避免 PortAudio 缓冲爆炸"""
+        """纯 pyaudio 播放，不涉及状态管理"""
         import pyaudio as _pa
         pa = _pa.PyAudio()
         stream = pa.open(
             format=_pa.paInt16, channels=1, rate=sample_rate,
             output=True,
         )
-        # 分块写入，每块 2 秒，防止环形缓冲溢出导致爆破音+跳段
-        chunk_frames = sample_rate * 2
-        chunk_bytes = chunk_frames * 2  # 16bit mono = 2 bytes/frame
-        offset = 0
-        while offset < len(wav_data):
-            chunk = wav_data[offset:offset + chunk_bytes]
-            if not chunk:
-                break
-            stream.write(chunk)
-            offset += chunk_bytes
+        stream.write(wav_data)
         stream.stop_stream()
         stream.close()
         pa.terminate()
