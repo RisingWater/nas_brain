@@ -191,14 +191,14 @@ export default function TracePage() {
     return options;
   }, [items]);
 
-  const fetchList = async (p: number) => {
+  const fetchList = async (p: number, protocol?: string, user?: string) => {
     setLoading(true);
     try {
       const data = await listTraces({
         limit: pageSize,
         offset: (p - 1) * pageSize,
-        protocol: filterProtocol,
-        user_id: filterUser,
+        protocol,
+        user_id: user,
         skip_skip: false,
       });
       setItems(data.items);
@@ -210,12 +210,15 @@ export default function TracePage() {
     }
   };
 
-  // 筛选或翻页时重新加载
+  // 筛选变化时回到第一页
   useEffect(() => {
     setPage(1);
   }, [filterProtocol, filterUser]);
 
-  useEffect(() => { fetchList(page); }, [page, filterProtocol, filterUser]);
+  // 筛选或翻页时加载（翻页和第一页重复请求由 React 的 bailing 机制跳过）
+  useEffect(() => {
+    fetchList(page, filterProtocol, filterUser);
+  }, [page, filterProtocol, filterUser]);
 
   const handleDelete = (requestId: string) => {
     Modal.confirm({
