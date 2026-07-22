@@ -257,7 +257,7 @@ def list_traces(
         conditions.append("t.reply_skip = 0")
     where = " AND ".join(conditions) if conditions else "1=1"
 
-    total = conn.execute(f"SELECT COUNT(*) FROM request_traces WHERE {where}", params).fetchone()[0]
+    total = conn.execute(f"SELECT COUNT(*) FROM request_traces t WHERE {where}", params).fetchone()[0]
     rows = conn.execute(
         f"""SELECT t.*, COALESCE(u.display_name, '') as display_name
             FROM request_traces t
