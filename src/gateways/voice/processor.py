@@ -5,6 +5,7 @@ import json
 import time
 import logging
 import threading
+import queue
 import wave
 import requests
 import numpy as np
@@ -74,62 +75,109 @@ class VoiceProcessor:
         self._running = False
         vad_close()
 
+    @staticmethod
+    def _split_sentences(text: str) -> list[str]:
+        """用。！？拆分句子"""
+        import re
+        parts = re.split(r'(。|！|？|\.|!|\?)', text)
+        sentences = []
+        buf = ""
+        for part in parts:
+            if part in "。！？.!?":
+                sentences.append(buf + part)
+                buf = ""
+            else:
+                buf += part
+        if buf.strip():
+            sentences.append(buf)
+        return [s.strip() for s in sentences if s.strip()]
+
+    def _play_audio(self, wav_data: bytes, sample_rate: int = 24000):
+        """纯 pyaudio 播放，不涉及状态管理"""
+        import pyaudio as _pa
+        pa = _pa.PyAudio()
+        stream = pa.open(
+            format=_pa.paInt16, channels=1, rate=sample_rate,
+            output=True,
+        )
+        stream.write(wav_data)
+        stream.stop_stream()
+        stream.close()
+        pa.terminate()
+
     def play_sync(self, text: str, request_id: str = ""):
-        """同步播放语音：HTTP 调 TTS 合成 + 获取 WAV 数据，直接用 play_wav 播放。"""
+        """同步播放语音：拆句 → 逐句 TTS → 边合成边播放。全程 STATE_PLAYING。"""
+        prev_state = self.get_state()
+        self.set_state(STATE_PLAYING)
         logger.warning(f"play_sync 开始播放 {text}")
         from src.common.utils.tracer import trace_event as _trace_event
         try:
-            url = cfg.get_service_url("playback_services", "/api/speak/play")
-            resp = requests.post(url, json={"text": text, "voice": "", "use_cache": True}, timeout=60)
-            if resp.status_code != 200:
-                logger.warning(f"TTS 返回 {resp.status_code}: {resp.text}")
+            sentences = self._split_sentences(text)
+            if not sentences:
                 return
 
-            body = resp.json()
-            data = body.get("data", {})
-            sample_rate = data.get("sample_rate", 24000)
+            play_queue: queue.Queue = queue.Queue()
+            done_event = threading.Event()
 
-            if "file_path" in data:
-                # 单机模式：读临时文件
-                with open(data["file_path"], "rb") as f:
-                    wav_data = f.read()
+            # 消费者线程：逐条出队播放
+            def _consumer():
+                while True:
+                    item = play_queue.get()
+                    if item is None:
+                        break
+                    wav, sr = item
+                    try:
+                        self._play_audio(wav, sr)
+                    except Exception as e:
+                        logger.error("音频播放失败: %s", e)
+                done_event.set()
+
+            consumer = threading.Thread(target=_consumer, daemon=True)
+            consumer.start()
+
+            # 生产者：逐句 TTS 合成，放入队列
+            for sentence in sentences:
                 try:
-                    os.unlink(data["file_path"])
-                except Exception:
-                    pass
-                self.play_wav(wav_data, sample_rate)
-            elif "wav_base64" in data:
-                # 多机模式：base64 解码
-                import base64 as _b64
-                wav_data = _b64.b64decode(data["wav_base64"])
-                self.play_wav(wav_data, sample_rate)
+                    url = cfg.get_service_url("playback_services", "/api/speak/play")
+                    resp = requests.post(
+                        url, json={"text": sentence, "voice": "", "use_cache": True}, timeout=60,
+                    )
+                    if resp.status_code != 200:
+                        logger.warning("TTS 返回 %s: %s", resp.status_code, resp.text)
+                        continue
+                    body = resp.json()
+                    data = body.get("data", {})
+                    sr = data.get("sample_rate", 24000)
+
+                    if "file_path" in data:
+                        with open(data["file_path"], "rb") as f:
+                            wav_data = f.read()
+                        try:
+                            os.unlink(data["file_path"])
+                        except Exception:
+                            pass
+                        play_queue.put((wav_data, sr))
+                    elif "wav_base64" in data:
+                        import base64 as _b64
+                        wav_data = _b64.b64decode(data["wav_base64"])
+                        play_queue.put((wav_data, sr))
+                except Exception as e:
+                    logger.error("TTS 合成失败: %s", e)
+
+            # 结束信号
+            play_queue.put(None)
+            done_event.wait()
 
             if request_id:
                 _trace_event(request_id, "tts_end")
         except Exception as e:
             logger.error("TTS 播放失败: %s", e)
+        finally:
+            self.set_state(prev_state)
 
     def play_wav(self, wav_data: bytes, sample_rate: int = 24000):
-        """直接播放 WAV 数据（不走 play_sync，避免循环），播完恢复状态。"""
-        prev_state = self.get_state()
-        with self._lock:
-            self._state = STATE_PLAYING
-        try:
-            import pyaudio as _pa
-            pa = _pa.PyAudio()
-            stream = pa.open(
-                format=_pa.paInt16, channels=1, rate=sample_rate,
-                output=True,
-            )
-            stream.write(wav_data)
-            stream.stop_stream()
-            stream.close()
-            pa.terminate()
-        except Exception as e:
-            logger.error("WAV 播放失败: %s", e)
-        finally:
-            with self._lock:
-                self._state = prev_state
+        """直接播放 WAV 数据（纯播放，不涉及状态管理，由调用方管理状态）"""
+        self._play_audio(wav_data, sample_rate)
 
     def get_state(self) -> int:
         with self._lock:
