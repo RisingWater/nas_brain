@@ -210,12 +210,7 @@ export default function TracePage() {
     }
   };
 
-  // 筛选变化时回到第一页
-  useEffect(() => {
-    setPage(1);
-  }, [filterProtocol, filterUser]);
-
-  // 筛选或翻页时加载（翻页和第一页重复请求由 React 的 bailing 机制跳过）
+  // 筛选或翻页时加载
   useEffect(() => {
     fetchList(page, filterProtocol, filterUser);
   }, [page, filterProtocol, filterUser]);
@@ -263,11 +258,37 @@ export default function TracePage() {
       render: (v: string) => <Text code copyable style={{ fontSize: 11 }}>{v}</Text>,
     },
     {
-      title: '协议', dataIndex: 'protocol', key: 'protocol', width: 70,
+      title: '协议', dataIndex: 'protocol', key: 'protocol', width: 80,
+      filters: [
+        { text: '语音', value: 'voice' },
+        { text: '微信', value: 'wechat' },
+        { text: 'Web', value: 'web' },
+      ],
+      filteredValue: filterProtocol ? [filterProtocol] : null,
       render: (v: string) => <Tag>{v || '-'}</Tag>,
     },
     {
-      title: '用户', dataIndex: 'user_name', key: 'user_name', width: 100,
+      title: '用户', dataIndex: 'user_name', key: 'user_name', width: 110,
+      filterDropdown: ({ setSelectedKeys, selectedKeys, confirm }) => (
+        <div style={{ padding: 8 }}>
+          <Select
+            showSearch
+            allowClear
+            style={{ width: 160 }}
+            placeholder="搜索用户"
+            value={selectedKeys[0] as string || undefined}
+            onChange={(value) => {
+              setSelectedKeys(value ? [value] : []);
+              confirm();
+            }}
+            options={userOptions}
+            filterOption={(input, option) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+          />
+        </div>
+      ),
+      filteredValue: filterUser ? [filterUser] : null,
       render: (v: string) => v || '-',
     },
     {
@@ -284,7 +305,6 @@ export default function TracePage() {
           if (d) parts.push(`${pair.label} ${(d / 1000).toFixed(1)}s`);
         }
         if (parts.length === 0) {
-          // fallback: 总耗时
           const times = Object.values(stages).filter((v): v is number => typeof v === 'number');
           if (times.length < 2) return '-';
           return <Text>{(Math.max(...times) - Math.min(...times)) / 1000}s</Text>;
@@ -313,32 +333,8 @@ export default function TracePage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ marginBottom: 12 }}>
         <Text type="secondary">共 {total} 条追踪记录</Text>
-        <Select
-          allowClear
-          placeholder="筛选协议"
-          style={{ width: 120 }}
-          value={filterProtocol}
-          onChange={setFilterProtocol}
-          options={[
-            { value: 'voice', label: '语音' },
-            { value: 'wechat', label: '微信' },
-            { value: 'web', label: 'Web' },
-          ]}
-        />
-        <Select
-          allowClear
-          showSearch
-          placeholder="筛选用户"
-          style={{ width: 150 }}
-          value={filterUser}
-          onChange={setFilterUser}
-          options={userOptions}
-          filterOption={(input, option) =>
-            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-          }
-        />
       </div>
       <Table
         dataSource={items}
@@ -346,6 +342,15 @@ export default function TracePage() {
         rowKey="id"
         loading={loading}
         size="small"
+        onChange={(pagination, filters) => {
+          const p = filters.protocol?.[0] as string | undefined;
+          const u = filters.user_name?.[0] as string | undefined;
+          if (p !== filterProtocol || u !== filterUser) {
+            setFilterProtocol(p);
+            setFilterUser(u);
+            setPage(1);
+          }
+        }}
         pagination={{
           current: page,
           pageSize,
