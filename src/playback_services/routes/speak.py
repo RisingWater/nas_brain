@@ -1,7 +1,6 @@
 """语音合成与播放路由 — 接口前缀 /api/speak"""
 import base64
 import logging
-import requests as _req
 import tempfile
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException
@@ -25,21 +24,6 @@ class PlayRequest(BaseModel):
     voice: str = Field("", description="语音名称，空则用默认")
     sync: bool = Field(False, description="是否同步播放（阻塞到播完），默认异步返回")
     request_id: str = Field("", description="链路追踪 ID")
-
-
-def _play_via_voice_gateway(wav_data: bytes, sample_rate: int = 24000, request_id: str = ""):
-    """将 WAV 音频发到 voice_gateway 播放，同步阻塞到播完"""
-    url = cfg.get_service_url("voice_gateway", "/api/voice/play-wav")
-    encoded = base64.b64encode(wav_data).decode("ascii")
-    try:
-        resp = _req.post(url, json={"data": encoded, "sample_rate": sample_rate, "request_id": request_id}, timeout=120)
-        if resp.status_code != 200:
-            logger.warning("voice_gateway 播放返回 %s: %s", resp.status_code, resp.text)
-            return False
-        return True
-    except _req.exceptions.ConnectionError:
-        logger.error("voice_gateway 不可用，播放失败")
-        return False
 
 
 @router.post("/synthesize")

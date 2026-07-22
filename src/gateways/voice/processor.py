@@ -175,10 +175,6 @@ class VoiceProcessor:
         finally:
             self.set_state(prev_state)
 
-    def play_wav(self, wav_data: bytes, sample_rate: int = 24000):
-        """直接播放 WAV 数据（纯播放，不涉及状态管理，由调用方管理状态）"""
-        self._play_audio(wav_data, sample_rate)
-
     def get_state(self) -> int:
         with self._lock:
             return self._state
