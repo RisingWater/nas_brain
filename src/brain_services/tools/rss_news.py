@@ -13,8 +13,8 @@ _NEWS_DIR = "data/rss_news"
 class ReadNewsTool(BaseTool):
     def __init__(self):
         super().__init__(
-            name="read_news",
-            display_name="读取新闻",
+            name="rss_news",
+            display_name="RSS 新闻",
             description=(
                 "获取用户已订阅的RSS源最新推送内容。专用于快速获取今日/当下的"
                 "时政要闻、政策动向及股市财经快讯。此工具响应极快，是获取时效性"
