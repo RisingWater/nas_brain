@@ -92,28 +92,31 @@ class VoiceProcessor:
             sentences.append(buf)
         return [s.strip() for s in sentences if s.strip()]
 
-    def _play_audio(self, wav_data: bytes, sample_rate: int = 24000):
-        """pyaudio 播放，异常安全清理"""
-        import pyaudio as _pa
-        pa = _pa.PyAudio()
+    def _play_audio(self, pa, wav_data: bytes):
+        """pyaudio 播放单句，从 WAV 头读取格式参数"""
+        import wave as _wave, io as _io
+        with _wave.open(_io.BytesIO(wav_data), "rb") as _wf:
+            sr = _wf.getframerate()
+            channels = _wf.getnchannels()
+            sw = _wf.getsampwidth()
+        fmt_map = {1: pa.paInt8, 2: pa.paInt16}
+        fmt = fmt_map.get(sw, pa.paInt16)
         stream = None
         try:
-            stream = pa.open(
-                format=_pa.paInt16, channels=1, rate=sample_rate,
-                output=True,
-            )
-            stream.write(wav_data)
+            stream = pa.open(format=fmt, channels=channels, rate=sr, output=True)
+            stream.write(wav_data[44:] if len(wav_data) > 44 else wav_data)
         finally:
             if stream:
                 stream.stop_stream()
                 stream.close()
-            pa.terminate()
 
     def play_sync(self, text: str, request_id: str = ""):
         """同步播放语音：拆句 → 逐句 TTS → 边合成边播放。全程 STATE_PLAYING。"""
         prev_state = self.get_state()
         self.set_state(STATE_PLAYING)
         logger.warning(f"play_sync 开始播放 {text}")
+        import pyaudio as _pa
+        _pa_instance = _pa.PyAudio()
         from src.common.utils.tracer import trace_event as _trace_event
         try:
             sentences = self._split_sentences(text)
@@ -135,7 +138,7 @@ class VoiceProcessor:
                     logger.warning("播放音频 %.1fs", dur)
                     t0 = time.time()
                     try:
-                        self._play_audio(wav, sr)
+                        self._play_audio(_pa_instance, wav)
                     except Exception as e:
                         logger.error("音频播放失败: %s", e)
                     logger.warning("播放结束 耗时%.2fs", time.time() - t0)
@@ -192,6 +195,10 @@ class VoiceProcessor:
         except Exception as e:
             logger.error("TTS 播放失败: %s", e)
         finally:
+            try:
+                _pa_instance.terminate()
+            except Exception:
+                pass
             self.set_state(prev_state)
 
     def get_state(self) -> int:

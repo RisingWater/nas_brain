@@ -35,7 +35,7 @@ def trace_event(request_id: str, stage: str, metadata: dict | None = None,
                 "protocol": protocol,
                 "user_id": user_id,
             },
-            timeout=0.2,
+            timeout=2,
         )
         if resp.status_code >= 400:
             logger.warning("trace_event %s/%s 返回 %s: %s", request_id[:12], stage, resp.status_code, resp.text[:200])

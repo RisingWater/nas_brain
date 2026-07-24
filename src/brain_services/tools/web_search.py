@@ -12,7 +12,7 @@ class WebSearchTool(BaseTool):
         super().__init__(
             name="web_search",
             display_name="搜索网页",
-            description="仅用于查询最新时效性信息：新闻、实时数据、近期事件。常识、历史、科学、编程等知识类问题不要调用。",
+            description="实时互联网搜索工具。注意：响应速度较慢且成本较高。仅在以下场景使用：1. rss_news 返回结果不足以回答用户问题时（需补充背景）；2. 用户明确要求搜索特定历史事件、非订阅来源的个股深度研报，或需要验证RSS摘要中的具体数据（如某公司具体财报数字）。常识、历史、科学、编程等知识类问题不要调用。若非上述情况，请优先使用 rss_news。",
             parameters={
                 "type": "object",
                 "properties": {

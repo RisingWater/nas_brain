@@ -34,7 +34,6 @@ class DBConnection:
             isolation_level=None,
         )
         conn.row_factory = sqlite3.Row
-        # 宽松 UTF-8 解码，避免已有损坏数据导致崩溃
         conn.text_factory = lambda x: x.decode("utf-8", "replace")
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=5000")
