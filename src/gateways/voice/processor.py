@@ -159,7 +159,6 @@ class VoiceProcessor:
                         continue
                     body = resp.json()
                     data = body.get("data", {})
-                    sr = data.get("sample_rate", 24000)
 
                     if "file_path" in data:
                         with open(data["file_path"], "rb") as f:
@@ -173,8 +172,13 @@ class VoiceProcessor:
                         wav_data = _b64.b64decode(data["wav_base64"])
                     else:
                         continue
+
+                    # 从 WAV 头读取真实采样率
+                    import io as _io, wave as _wave
+                    with _wave.open(_io.BytesIO(wav_data), "rb") as _wf:
+                        sr = _wf.getframerate()
                     dur = len(wav_data) / sr / 2
-                    logger.info("TTS 第%d句完成 耗时%.1fs 音频%.1fs", idx + 1, t_tts, dur)
+                    logger.info("TTS 第%d句完成 耗时%.1fs 音频%.1fs (sr=%d)", idx + 1, t_tts, dur, sr)
                     play_queue.put((wav_data, sr))
                 except Exception as e:
                     logger.error("TTS 合成失败: %s", e)
