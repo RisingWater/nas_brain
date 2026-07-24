@@ -93,7 +93,7 @@ class VoiceProcessor:
         return [s.strip() for s in sentences if s.strip()]
 
     def _play_audio(self, pa, wav_data: bytes):
-        """pyaudio 播放单句，从 WAV 头读取格式参数"""
+        """pyaudio 播放单句，从 WAV 头读取格式参数，分块写入（200ms/块）"""
         import wave as _wave, io as _io
         with _wave.open(_io.BytesIO(wav_data), "rb") as _wf:
             sr = _wf.getframerate()
@@ -101,10 +101,19 @@ class VoiceProcessor:
             sw = _wf.getsampwidth()
         fmt_map = {1: pa.paInt8, 2: pa.paInt16}
         fmt = fmt_map.get(sw, pa.paInt16)
+        # 裸 PCM 数据
+        pcm = wav_data[44:] if len(wav_data) > 44 else wav_data
+        frame_size = sw * channels  # 一帧字节数
+        chunk_frames = int(sr * 0.2)  # 200ms 的帧数
+        chunk_bytes = chunk_frames * frame_size
         stream = None
         try:
             stream = pa.open(format=fmt, channels=channels, rate=sr, output=True)
-            stream.write(wav_data[44:] if len(wav_data) > 44 else wav_data)
+            offset = 0
+            while offset < len(pcm):
+                end = min(offset + chunk_bytes, len(pcm))
+                stream.write(pcm[offset:end])
+                offset = end
         finally:
             if stream:
                 stream.stop_stream()
