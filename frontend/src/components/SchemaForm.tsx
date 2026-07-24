@@ -21,6 +21,17 @@ function renderControl(prop: Record<string, any>) {
   if (prop.type === 'integer' || prop.type === 'number') {
     return <InputNumber min={prop.minimum} max={prop.maximum} style={{ width: '100%' }} />;
   }
+  // 数组 + 枚举 → 多选 Select
+  if (prop.type === 'array' && prop.items?.enum && Array.isArray(prop.items.enum)) {
+    const opts = prop.items.enum.map((v: any) => ({ value: v, label: String(v) }));
+    return (
+      <Select mode="multiple" showSearch allowClear placeholder="请选择" options={opts}
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              } />
+    );
+  }
+  // 有枚举值的单选 Select
   if (prop.enum && Array.isArray(prop.enum)) {
     const opts = prop.enum.map((v: any) => ({ value: v, label: String(v) }));
     return (
@@ -29,6 +40,10 @@ function renderControl(prop: Record<string, any>) {
                 (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
               } />
     );
+  }
+  // 无枚举的数组 → tags 自由输入
+  if (prop.type === 'array' && prop.items?.type === 'string') {
+    return <Select mode="tags" placeholder="输入后回车" tokenSeparators={[',']} />;
   }
   if (prop.type === 'string' && prop.maxLength) {
     return <Input.TextArea rows={prop.maxLength > 1000 ? 8 : 3} maxLength={prop.maxLength} showCount />;

@@ -259,6 +259,11 @@ async def proxy_detector_config(name: str, request: Request):
     return await _proxy_to_schedule(f"/api/detectors/{name}/config", request)
 
 
+@app.api_route("/api/detectors/{name}/run", methods=["POST"])
+async def proxy_detector_run(name: str, request: Request):
+    return await _proxy_to_schedule(f"/api/detectors/{name}/run", request)
+
+
 # ---- 代理 /api/processors → brain_services:9031 ----
 # 复用已有的 _proxy_to_brain（定义在 tools 代理上方）
 

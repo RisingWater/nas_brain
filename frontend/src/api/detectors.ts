@@ -28,3 +28,7 @@ export async function getDetectorConfig(name: string): Promise<DetectorConfigRes
 export async function saveDetectorConfig(name: string, config: Record<string, any>): Promise<void> {
   await client.put(`/detectors/${name}/config`, config);
 }
+
+export async function runDetector(name: string): Promise<void> {
+  await client.post(`/detectors/${name}/run`);
+}

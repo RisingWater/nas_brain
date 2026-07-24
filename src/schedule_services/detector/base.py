@@ -65,6 +65,10 @@ class BaseDetector:
         """调度器每 tick 调用。由子类判断当前是否该执行。"""
         raise NotImplementedError
 
+    def trigger(self):
+        """手动触发运行，无视时间检查立刻执行。"""
+        self.process_loop(DetectorContext())
+
     # ---- 配置相关 ----
 
     def _config_path(self) -> str:

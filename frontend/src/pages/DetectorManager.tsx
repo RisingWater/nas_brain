@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  Card, Table, Button, Row, Col, Typography, Space, Tag, message, Switch,
+  Table, Button, Row, Col, Typography, Space, Tag, message, Switch,
   Drawer, Spin, Form,
 } from 'antd';
-import { ReloadOutlined, ApiOutlined, SettingOutlined } from '@ant-design/icons';
+import { ReloadOutlined, SettingOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { listDetectors, reloadDetectors, enableDetector, getDetectorConfigSchema, getDetectorConfig, saveDetectorConfig } from '../api/detectors';
+import { listDetectors, reloadDetectors, enableDetector, getDetectorConfigSchema, getDetectorConfig, saveDetectorConfig, runDetector } from '../api/detectors';
 import type { DetectorInfo } from '../types/detector';
 import SchemaForm from '../components/SchemaForm';
 
@@ -134,12 +134,29 @@ export default function DetectorManager() {
         : <Tag color="default">已禁用</Tag>,
     },
     {
-      title: '配置', key: 'config', width: 70,
+      title: '操作', key: 'actions', width: 130,
       render: (_, r) => (
-        <Button type="link" size="small" icon={<SettingOutlined />}
-                onClick={() => openConfig(r.name)}>
-          配置
-        </Button>
+        <Space size={0}>
+          <Button type="link" size="small" icon={<SettingOutlined />}
+                  onClick={() => openConfig(r.name)}>
+            配置
+          </Button>
+          <Button type="link" size="small" icon={<PlayCircleOutlined />}
+                  loading={operating === r.name}
+                  onClick={async () => {
+                    setOperating(r.name);
+                    try {
+                      await runDetector(r.name);
+                      message.success(`${r.name} 已运行`);
+                    } catch {
+                      message.error('运行失败');
+                    } finally {
+                      setOperating(null);
+                    }
+                  }}>
+            运行
+          </Button>
+        </Space>
       ),
     },
   ];

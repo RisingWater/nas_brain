@@ -88,6 +88,20 @@ def save_detector_config(name: str, body: dict):
     return {"code": 200, "data": {"saved": ok}, "message": "ok" if ok else "保存失败"}
 
 
+@router.post("/{name}/run")
+def run_detector(name: str):
+    """手动触发运行，无视时间立即执行"""
+    d = registry.get(name)
+    if not d:
+        raise HTTPException(404, f"detector '{name}' 不存在")
+    try:
+        d.trigger()
+        return {"code": 200, "data": {"name": name}, "message": "ok"}
+    except Exception as e:
+        logger.error("运行 %s 失败: %s", name, e)
+        return {"code": 500, "data": None, "message": str(e)}
+
+
 def _inline_refs(node: dict, defs: dict | None = None):
     """递归展开 JSON Schema 中的 $ref 引用（如 #/$defs/XXX）"""
     if defs is None:
