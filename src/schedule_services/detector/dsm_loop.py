@@ -1,49 +1,79 @@
 """dsm_detector — 开门检测插件（移植自 wechat_bot/detector/dsm_loop.py）"""
+import json
 import logging
 import threading
+from typing import Literal
+from pydantic import BaseModel, Field
+
 from .base import BaseDetector, DetectorContext, registry
 from src.common.clients.kv_store import kv_store
 
 logger = logging.getLogger("schedule_services.detector.dsm")
 
-router_data = [
-    {
-        "name": "乔宝",
-        "detectors": [
-            {
-                "chatname": "学霸乔宝专项配套办公室",
-                "text": "王煜乔已经到家啦",
-                "type": "notify",
-            }
-        ]
-    },
-    {
-        "name": "顶子",
-        "detectors": [
-            {
-                "text": "王旭，欢迎回家",
-                "type": "audio_play"
-            }
-        ]
-    }
+class DsmRule(BaseModel):
+    name: str = Field(
+        ..., title="姓名",
+        description="门禁日志中的人名，支持 * 通配",
+    )
+    notify_type: Literal["wechat", "voice"] = Field(
+        "wechat", title="通知方式",
+        description="wechat=微信群通知+语音, voice=仅语音播报",
+    )
+    chatname: str = Field(
+        "", title="微信群",
+        description="wechat 方式时需要填写",
+    )
+    text: str = Field(
+        "", title="播报文字",
+    )
+
+
+_default_rules = [
+    DsmRule(name="乔宝", notify_type="wechat", chatname="学霸乔宝专项配套办公室", text="王煜乔已经到家啦"),
+    DsmRule(name="顶子", notify_type="voice", text="王旭，欢迎回家"),
 ]
+
+
+class DsmConfig(BaseModel):
+    interval: int = Field(
+        180, title="运行间隔（秒）", ge=60,
+        description="每隔多少秒查询一次开门记录",
+    )
+    rules: list[DsmRule] = Field(
+        default=_default_rules,
+        title="检测规则",
+        description="配置每条规则：匹配的姓名、通知方式、播报内容",
+    )
 
 
 class DsmDetector(BaseDetector):
     """DSM 智能门禁开门检测
 
-    轮询 DSM 开门记录，发现新开门 → 微信通知 + 语音播报
+    轮询 DSM 开门记录，发现新开门 → 微信通知 / 语音播报
     """
 
     name = "dsm"
     interval = 180  # 默认 3 分钟
+    ConfigModel = DsmConfig
     _default_interval = 180
 
     def __init__(self):
         super().__init__()
-        self._interval = self.interval  # 初始化间隔
-        self._dsmxp = None  # 懒加载
+        self._interval = self.interval
+        self._rules: list[dict] = [r.model_dump() for r in _default_rules]
+        self._dsmxp = None
         self._restore_timer = None
+
+    def load_config(self) -> dict:
+        cfg = super().load_config()
+        self.interval = cfg.get("interval", self.interval)
+        # 用保存的规则覆盖，校验后回退到默认
+        saved = cfg.get("rules", None)
+        if saved and isinstance(saved, list):
+            self._rules = saved
+        else:
+            self._rules = [r.model_dump() for r in _default_rules]
+        return cfg
 
     def _get_dsmxp(self):
         if self._dsmxp is None:
@@ -83,20 +113,24 @@ class DsmDetector(BaseDetector):
                 if not kv_store.exists(config_key):
                     logger.info("发现新开门记录: %s %s", name, timestamp)
 
-                    for route in router_data:
-                        if route["name"] == "*" or route["name"] == name:
-                            for detector in route["detectors"]:
-                                if detector["type"] == "notify":
-                                    msg = f"🎉🎉🎉 {name} 于 {timestamp.split(' ')[1]} 到家啦"
-                                    ctx.send_wechat(detector["chatname"], msg)
-                                    if detector.get("text"):
-                                        ctx.speak_voice(detector["text"])
-                                    send_msg = True
-                                    break
-                                elif detector["type"] == "audio_play":
-                                    ctx.speak_voice(detector["text"])
-                                    send_msg = True
-                                    break
+                    for rule in self._rules:
+                        if rule["name"] != "*" and rule["name"] != name:
+                            continue
+                        rtype = rule.get("notify_type", rule.get("type", "wechat"))
+                        text = rule.get("text", "")
+
+                        if rtype == "wechat":
+                            chatname = rule.get("chatname", "")
+                            if chatname:
+                                msg = f"🎉🎉🎉 {name} 于 {timestamp.split(' ')[1]} 到家啦"
+                                ctx.send_wechat(chatname, msg)
+                            if text:
+                                ctx.speak_voice(text)
+                        elif rtype == "voice":
+                            if text:
+                                ctx.speak_voice(text)
+                        send_msg = True
+
                     kv_store.set(config_key, "1", namespace="dsm")
 
             if send_msg and self._interval != self._default_interval:

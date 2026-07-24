@@ -1,13 +1,24 @@
 """exam_detector — 考试成绩检测插件（移植自 wechat_bot/detector/exam_loop.py）"""
 import logging
+from pydantic import BaseModel, Field
+
 from .base import BaseDetector, DetectorContext, registry
 from src.common.clients.kv_store import kv_store
 
 logger = logging.getLogger("schedule_services.detector.exam")
 
-router_data = [
-    {"chatname": "学霸乔宝专项配套办公室"},
-]
+
+class ExamConfig(BaseModel):
+    interval: int = Field(
+        300, title="运行间隔（秒）", ge=60,
+        description="每隔多少秒查询一次新成绩",
+    )
+    chatnames: list[str] = Field(
+        ["学霸乔宝专项配套办公室"],
+        title="通知群聊",
+        description="选择要通知的群聊，可多选",
+        json_schema_extra={"x_source": "wechat_names"},
+    )
 
 
 class ExamDetector(BaseDetector):
@@ -18,10 +29,18 @@ class ExamDetector(BaseDetector):
 
     name = "exam"
     interval = 300  # 5 分钟
+    ConfigModel = ExamConfig
 
     def __init__(self):
         super().__init__()
         self._zhixue = None
+        self._chatnames: list[str] = ["学霸乔宝专项配套办公室"]
+
+    def load_config(self) -> dict:
+        cfg = super().load_config()
+        self.interval = cfg.get("interval", self.interval)
+        self._chatnames = cfg.get("chatnames", self._chatnames)
+        return cfg
 
     def _get_zhixue(self):
         if self._zhixue is None:
@@ -52,8 +71,7 @@ class ExamDetector(BaseDetector):
                     has_new = True
                     logger.info("发现新成绩: %s", report.get("paperName"))
 
-                    for route in router_data:
-                        chatname = route.get("chatname")
+                    for chatname in self._chatnames:
                         if chatname:
                             msg = f"🎉🎉🎉 乔宝 {report.get('paperName')} 成绩出来啦，分数{report.get('userScore')}"
                             ctx.send_wechat(chatname, msg)
@@ -61,8 +79,7 @@ class ExamDetector(BaseDetector):
                     kv_store.set(config_key, "1", namespace="exam")
 
                 if has_new:
-                    for route in router_data:
-                        chatname = route.get("chatname")
+                    for chatname in self._chatnames:
                         if chatname:
                             total_score = 0
                             lines = [f"{exam_name}"]

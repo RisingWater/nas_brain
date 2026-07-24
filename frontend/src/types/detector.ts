@@ -16,3 +16,15 @@ export interface DetectorActionResponse {
   data: { loaded?: number; reloaded?: number; total: number };
   message: string;
 }
+
+export interface DetectorConfigResponse {
+  code: number;
+  data: Record<string, any>;
+  message: string;
+}
+
+export interface DetectorConfigSchemaResponse {
+  code: number;
+  data: Record<string, any>;
+  message: string;
+}

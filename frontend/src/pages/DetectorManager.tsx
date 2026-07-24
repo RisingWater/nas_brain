@@ -1,11 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Card, Table, Button, Row, Col, Typography, Space, Tag, message, Switch,
+  Drawer, Spin, Form,
 } from 'antd';
-import { ReloadOutlined, ApiOutlined } from '@ant-design/icons';
+import { ReloadOutlined, ApiOutlined, SettingOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { listDetectors, reloadDetectors, enableDetector } from '../api/detectors';
+import { listDetectors, reloadDetectors, enableDetector, getDetectorConfigSchema, getDetectorConfig, saveDetectorConfig } from '../api/detectors';
 import type { DetectorInfo } from '../types/detector';
+import SchemaForm from '../components/SchemaForm';
 
 const { Title, Text } = Typography;
 
@@ -14,6 +16,14 @@ export default function DetectorManager() {
   const [loading, setLoading] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [operating, setOperating] = useState<string | null>(null);
+
+  // 配置 Drawer
+  const [configOpen, setConfigOpen] = useState(false);
+  const [configName, setConfigName] = useState('');
+  const [configSchema, setConfigSchema] = useState<any>(null);
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configForm] = Form.useForm();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -57,6 +67,42 @@ export default function DetectorManager() {
     }
   };
 
+  // 配置
+  const openConfig = async (name: string) => {
+    setConfigName(name);
+    setConfigOpen(true);
+    setConfigLoading(true);
+    setConfigSchema(null);
+    configForm.resetFields();
+    try {
+      const [schemaRes, configRes] = await Promise.all([
+        getDetectorConfigSchema(name),
+        getDetectorConfig(name),
+      ]);
+      setConfigSchema(schemaRes.data);
+      configForm.setFieldsValue(configRes.data);
+    } catch {
+      message.error('加载配置失败');
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    try {
+      const values = await configForm.validateFields();
+      setConfigSaving(true);
+      await saveDetectorConfig(configName, values);
+      message.success('配置已保存');
+      setConfigOpen(false);
+      fetchData();  // 刷新列表（间隔等字段会更新）
+    } catch {
+      message.error('保存配置失败');
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
   const formatInterval = (seconds: number) => {
     if (seconds < 60) return `${seconds}s`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
@@ -87,6 +133,15 @@ export default function DetectorManager() {
         ? <Tag color="processing">活跃</Tag>
         : <Tag color="default">已禁用</Tag>,
     },
+    {
+      title: '配置', key: 'config', width: 70,
+      render: (_, r) => (
+        <Button type="link" size="small" icon={<SettingOutlined />}
+                onClick={() => openConfig(r.name)}>
+          配置
+        </Button>
+      ),
+    },
   ];
 
   return (
@@ -111,6 +166,27 @@ export default function DetectorManager() {
         pagination={false}
         size="small"
       />
+
+      <Drawer
+        title={`${configName} 配置`}
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+        width={480}
+        extra={
+          <Button type="primary" loading={configSaving} onClick={handleSaveConfig}>
+            保存
+          </Button>
+        }
+        destroyOnClose
+      >
+        <Spin spinning={configLoading}>
+          {configSchema ? (
+            <SchemaForm schema={configSchema} form={configForm} />
+          ) : (
+            !configLoading && <Text type="secondary">该任务无可配置项</Text>
+          )}
+        </Spin>
+      </Drawer>
     </>
   );
 }

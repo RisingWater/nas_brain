@@ -1,7 +1,10 @@
 """Detector 插件系统 — BaseDetector + DetectorRegistry + DetectorContext"""
+import json
 import logging
+import os
 import time
 from typing import Optional
+from pydantic import BaseModel
 
 logger = logging.getLogger("schedule_services.detector")
 
@@ -48,6 +51,12 @@ class BaseDetector:
     visible: bool = True  # 是否在管理页面显示
     enable: bool = True  # 是否启用（禁用后不运行）
 
+    # 子类可覆盖：声明配置的 Pydantic 模型
+    ConfigModel: type[BaseModel] | None = None
+
+    # 配置文件目录
+    _config_dir: str = "data/detector"
+
     def __init__(self):
         if not self.name:
             self.name = self.__class__.__name__
@@ -55,6 +64,46 @@ class BaseDetector:
     def process_loop(self, ctx: DetectorContext):
         """调度器每 tick 调用。由子类判断当前是否该执行。"""
         raise NotImplementedError
+
+    # ---- 配置相关 ----
+
+    def _config_path(self) -> str:
+        return os.path.join(self._config_dir, f"{self.name}.json")
+
+    def get_config_schema(self) -> dict:
+        """返回 JSON Schema（由 config-schema API 调用）"""
+        if not self.ConfigModel:
+            return {"type": "object", "properties": {}}
+        return self.ConfigModel.model_json_schema()
+
+    def get_default_config(self) -> dict:
+        if self.ConfigModel:
+            return self.ConfigModel().model_dump()
+        return {}
+
+    def load_config(self) -> dict:
+        """从 data/detector/{name}.json 加载，合并默认值"""
+        default = self.get_default_config()
+        path = self._config_path()
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+                return {**default, **saved}
+        except Exception as e:
+            logger.warning("加载 %s 配置失败: %s", path, e)
+        return default
+
+    def save_config(self, config: dict) -> bool:
+        path = self._config_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            logger.error("保存 %s 配置失败: %s", self.name, e)
+            return False
 
 
 class DetectorRegistry:
