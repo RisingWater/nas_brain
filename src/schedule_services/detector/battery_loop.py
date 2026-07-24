@@ -61,6 +61,17 @@ class BatteryDetector(BaseDetector):
         self._low_battery_threshold = cfg.get("low_threshold", self._low_battery_threshold)
         return cfg
 
+    def trigger(self):
+        """手动触发：无视时间，立即执行电量检查"""
+        from .base import DetectorContext
+        saved = self._check_time
+        self._check_time = dt_time(0, 0)  # 保证时间检查通过
+        self._last_check_date = None
+        try:
+            self.process_loop(DetectorContext())
+        finally:
+            self._check_time = saved
+
     def process_loop(self, ctx: DetectorContext):
         now = datetime.now()
 

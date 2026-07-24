@@ -139,27 +139,28 @@ class RssNewsDetector(BaseDetector):
         for feed in self._feeds:
             self._last_check.pop(feed["url"], None)  # 清日期标记
             try:
-                self._check_feed(feed, now, today)
+                self._check_feed(feed, now, today, force=True)
             except Exception as e:
                 logger.error("手动触发 %s 失败: %s", feed.get("name", feed["url"]), e)
 
-    def _check_feed(self, feed: dict, now: datetime, today: str):
+    def _check_feed(self, feed: dict, now: datetime, today: str, force: bool = False):
         feed_url = feed["url"]
         feed_name = feed.get("name", feed_url)
         fetch_times = feed.get("fetch_times", ["04:00", "16:00"])
 
-        # 检查当前时间是否匹配该源的拉取时间
-        matched = False
-        for t in fetch_times:
-            try:
-                parts = t.strip().split(":")
-                if now.hour == int(parts[0]) and now.minute == int(parts[1]):
-                    matched = True
-                    break
-            except Exception:
-                continue
-        if not matched:
-            return
+        # 检查当前时间是否匹配该源的拉取时间（手动触发时跳过）
+        if not force:
+            matched = False
+            for t in fetch_times:
+                try:
+                    parts = t.strip().split(":")
+                    if now.hour == int(parts[0]) and now.minute == int(parts[1]):
+                        matched = True
+                        break
+                except Exception:
+                    continue
+            if not matched:
+                return
 
         # 同一天不重复触发（同一个源一天内多次拉取需要配置多个时间点）
         last_date = self._last_check.get(feed_url)
@@ -219,10 +220,13 @@ class RssNewsDetector(BaseDetector):
             self._save_state()
             return
 
-        # 保存到文件
-        os.makedirs(self._output_dir, exist_ok=True)
+        # 保存到文件（按标签分目录）
+        feed_tags = feed.get("tags", []) or []
+        tag_dir = feed_tags[0] if feed_tags else "其他"
+        save_dir = os.path.join(self._output_dir, tag_dir)
+        os.makedirs(save_dir, exist_ok=True)
         date_str = now.strftime("%Y%m%d")
-        filepath = os.path.join(self._output_dir, f"{feed_name}_{date_str}.json")
+        filepath = os.path.join(save_dir, f"{feed_name}_{date_str}.json")
 
         if has_pubdate:
             existing = []
