@@ -50,6 +50,7 @@ class ControlPs5Tool(BaseTool):
         super().__init__(
             name="control_ps5",
             display_name="控制PS5",
+            description="开关 PS5 游戏主机，可联动小米电视切换输入源",
             parameters={
                 "type": "object",
                 "properties": {
