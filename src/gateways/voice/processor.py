@@ -94,13 +94,13 @@ class VoiceProcessor:
 
     def _play_audio(self, pa, wav_data: bytes):
         """pyaudio 播放单句，从 WAV 头读取格式参数，分块写入（200ms/块）"""
-        import wave as _wave, io as _io
+        import pyaudio as _pa, wave as _wave, io as _io
         with _wave.open(_io.BytesIO(wav_data), "rb") as _wf:
             sr = _wf.getframerate()
             channels = _wf.getnchannels()
             sw = _wf.getsampwidth()
-        fmt_map = {1: pa.paInt8, 2: pa.paInt16}
-        fmt = fmt_map.get(sw, pa.paInt16)
+        fmt_map = {1: _pa.paInt8, 2: _pa.paInt16}
+        fmt = fmt_map.get(sw, _pa.paInt16)
         # 裸 PCM 数据
         pcm = wav_data[44:] if len(wav_data) > 44 else wav_data
         frame_size = sw * channels  # 一帧字节数
