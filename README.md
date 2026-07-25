@@ -266,17 +266,23 @@ registry.register(MyProcessor())
 
 ## 语音流程
 
-```
+```text
+主循环单线程驱动：
+
 唤醒词触发 → 播"我在呢"
   → VAD 录音（检测静音自动停止）
   → 声纹识别（匹配用户 / 归入未分配）
   → STT（SenseVoiceSmall）
-  → brain_services（LLM + 工具）
-  → TTS 播放
-  → __SKIP__ → 标记唤醒记录为 negative
+  → brain_services（LLM + 工具，异步）
+  → 回到主循环
+
+外部播放请求（brain 回复、定时器通知）：
+  → 入播放队列
+  → 主循环在空闲时取出串行播放
 ```
 
-状态互斥规则：播放时不录音、录音时不播放、处理中可打断。
+状态互斥规则：主循环只在 IDLE 时检测唤醒词；非 IDLE（录音/处理/播放）时跳过。
+外部调用 `/api/voice/speak` 不阻塞 HTTP，加入队列后立即返回，播放由主循环统一调度。
 
 ## 三层记忆
 

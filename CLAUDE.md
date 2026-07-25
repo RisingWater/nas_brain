@@ -170,16 +170,20 @@ def handle(self, req, ctx) -> dict | None:
 
 ## 语音网关（voice_gateway）
 
-`src/gateways/voice/` 微服务，端口 9050，包含完整语音对话链路：
+`src/gateways/voice/` 微服务，端口 9050，单线程主循环驱动：
 
 ```
-唤醒词检测 → 播"我在呢" → VAD 录音 → 声纹识别 → STT → brain_services → TTS 播放
+主循环:
+  ├─ 1. 播放队列（外部请求串行播放）
+  ├─ 2. 唤醒词检测
+  │     → "我在呢" → VAD → STT → 声纹 → brain POST
+  └─ 3. 状态跳过（非 IDLE）
 ```
 
 **状态互斥：**
-- PLAYING 时 → 不检测唤醒词（不听自己说话）
-- RECORDING 时 → 不播放（不污染录音）
-- PROCESSING 时 → 允许播放（定时器/微信推送可打断）
+- RECORDING/PROCESSING/PLAYING 时 → 主循环跳过唤醒词检测
+- 外部播放请求（brain 回复、定时器通知）→ 入 `_play_queue`，主循环在适当时候取出串行播放
+- `/api/voice/speak` 不阻塞 HTTP，立即返回
 
 **组件：**
 | 文件 | 功能 | 依赖 |
@@ -223,11 +227,11 @@ cfg.get_service_url("voice_gateway", "/api/voice/speak")
 
 | 状态 | 含义 | 谁设置 |
 |------|------|--------|
-| `idle` | 空闲 | agent.py（处理完）、speak.py（播完） |
-| `listening` | 聆听中 | voice_gateway processor.py（VAD 开始） |
-| `thinking` | 思考中 | engine.py（LLM 调用前）、voice processor.py（发往 brain） |
+| `idle` | 空闲 | agent.py（处理完）、processor.py play_sync（播完） |
+| `listening` | 聆听中 | 现在由 brain_services engine.py 管理 |
+| `thinking` | 思考中 | engine.py（LLM 调用前） |
 | `operating` | 操作中 | llm_handler.py（工具调用时） |
-| `speaking` | 说话中 | agent.py（回复就绪）、speak.py（TTS 播放时） |
+| `speaking` | 说话中 | agent.py（回复就绪）、processor.py play_sync（TTS 播放时） |
 
 ### API
 
