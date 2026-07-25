@@ -92,7 +92,7 @@ class VoiceProcessor:
             sentences.append(buf)
         return [s.strip() for s in sentences if s.strip()]
 
-    def _play_audio(self, pa, wav_data: bytes):
+    def _play_audio(self, pa, wav_data: bytes, last_sentence: bool = False):
         """pyaudio 播放单句，从 WAV 头读取格式参数，分块写入（200ms/块）"""
         import pyaudio as _pa, wave as _wave, io as _io
         import time
@@ -141,7 +141,8 @@ class VoiceProcessor:
             if stream:
                 try:
                     stream.close()
-                    time.sleep(0.2)
+                    if not last_sentence:
+                        time.sleep(0.2)
                 except Exception as e:
                     # ✅ 捕获关闭流时的异常
                     print(f"[ERROR] 关闭 stream 异常: {e}")
@@ -170,12 +171,12 @@ class VoiceProcessor:
                     item = play_queue.get()
                     if item is None:
                         break
-                    wav, sr = item
+                    wav, sr, last_sentence = item
                     dur = len(wav) / sr / 2  # 16bit mono
                     logger.warning("播放音频 %.1fs", dur)
                     t0 = time.time()
                     try:
-                        self._play_audio(_pa_instance, wav)
+                        self._play_audio(_pa_instance, wav, last_sentence)
                     except Exception as e:
                         logger.error("音频播放失败: %s", e)
                     logger.warning("播放结束 耗时%.2fs", time.time() - t0)
@@ -213,13 +214,18 @@ class VoiceProcessor:
                     else:
                         continue
 
+                    if idx == len(sentences) - 1:
+                        last_sentence = True
+                    else:
+                        last_sentence = False
+
                     # 从 WAV 头读取真实采样率
                     import io as _io, wave as _wave
                     with _wave.open(_io.BytesIO(wav_data), "rb") as _wf:
                         sr = _wf.getframerate()
                     dur = len(wav_data) / sr / 2
                     logger.info("TTS 第%d句完成 耗时%.1fs 音频%.1fs (sr=%d)", idx + 1, t_tts, dur, sr)
-                    play_queue.put((wav_data, sr))
+                    play_queue.put((wav_data, sr, last_sentence))
                 except Exception as e:
                     logger.error("TTS 合成失败: %s", e)
 
