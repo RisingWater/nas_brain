@@ -150,6 +150,8 @@ class VoiceProcessor:
 
     def play_sync(self, text: str, request_id: str = ""):
         """同步播放语音：拆句 → 逐句 TTS → 边合成边播放。全程 STATE_PLAYING。"""
+        while self.get_state() != STATE_IDLE:
+            time.sleep(0.1)
         self.set_state(STATE_PLAYING)
         logger.warning(f"play_sync 开始播放 {text}")
         import pyaudio as _pa
@@ -328,101 +330,6 @@ class VoiceProcessor:
         except Exception as e:
             logger.warning("更新唤醒词分类失败: %s", e)
 
-    # ---- VAD + 声纹 + STT + brain_services 管线 ----
-
-    def _set_ai_status(self, state: str, speaker: str = "", message: str = "", **extra):
-        """通过 brain_services 设置 AI 状态"""
-        try:
-            url = cfg.get_service_url("brain_services", "/api/status/set")
-            requests.post(url, json={"state": state, "speaker": speaker, "message": message, "extra": extra}, timeout=0.2)
-        except Exception as e:
-            logger.debug("设置状态失败: %s", e)
-
-    def _voice_pipeline(self, wakeword_id: str):
-        """VAD 录音 → 声纹 → STT → brain_services → TTS"""
-        request_id = f"voice_{uuid.uuid4().hex[:12]}"
-
-        from src.common.utils.tracer import trace_event as _trace_event, trace_content as _trace_content
-
-        # 后台发状态 + 追踪（不阻塞录音）
-        def _http_setup():
-            self._set_ai_status("listening")
-            _trace_event(request_id, "wakeword", protocol="voice")
-
-        http_thread = threading.Thread(target=_http_setup, daemon=True)
-        http_thread.start()
-
-        # 立即开始 VAD 录音（与 HTTP 并行）
-        self.set_state(STATE_RECORDING)
-        try:
-            silence_ms = self._get_vad_silence()
-            wav_path = vad_record(timeout_sec=_VAD_TIMEOUT, silence_ms=silence_ms)
-        except Exception as e:
-            logger.error("VAD 录音失败: %s", e)
-            self.set_state(STATE_IDLE)
-            return
-
-        # 等待后台 HTTP 完成（确保 record_end 在 wakeword 之后）
-        http_thread.join(timeout=3)
-        _trace_event(request_id, "record_end")
-
-        self.set_state(STATE_PROCESSING)
-
-        # 声纹识别（会移动音频文件到用户目录，返回新路径）
-        user_id = "u_temp_voice"
-        speaker = "未知用户"
-        speaker_score = 0.0
-        audio_path = wav_path  # 后续 STT 用这个路径（声纹可能已移动文件）
-        try:
-            user_id, speaker, audio_path = self._vp.detect(wav_path, wakeword_id)
-            # 从 detech 过程中获取分数
-            _trace_event(request_id, "voiceprint_end", metadata={"speaker": speaker, "user_id": user_id})
-        except Exception as e:
-            logger.warning("声纹识别失败: %s", e)
-
-        # STT 转文字（用声纹返回的路径，可能已被移动）
-        text = ""
-        try:
-            text = self._stt.transcribe(audio_path)
-            logger.info("STT 结果: %s", text[:100])
-        except Exception as e:
-            logger.warning("STT 失败: %s", e)
-        _trace_event(request_id, "stt_end")
-
-        if not text.strip():
-            logger.info("未检测到语音，跳过")
-            self._update_wakeword_category(wakeword_id, "negative")
-            self.set_state(STATE_IDLE)
-            return
-
-        # 更新追踪内容
-        _trace_content(request_id, text)
-
-        # 状态：思考中
-        self._set_ai_status("thinking", speaker=speaker, message=text[:80])
-
-        # POST brain_services（异步处理，真实回复会通过 _send_voice_text 推送回来）
-        try:
-            url = cfg.get_service_url("brain_services", "/api/agent-request")
-            req_body = {
-                "protocol": "voice",
-                "request_id": request_id,
-                "chat_type": "voice",
-                "user_id": user_id,
-                "content_type": "text",
-                "content": text,
-                "metadata": {"wakeword_id": wakeword_id, "speaker": speaker},
-            }
-            resp = requests.post(url, json=req_body, timeout=10)
-            if resp.status_code != 200:
-                logger.warning("brain_services 返回 %s，非服务故障", resp.status_code)
-        except Exception as e:
-            logger.error("brain_services 调用失败: %s", e)
-
-        self.set_state(STATE_IDLE)
-
-    # ---- 主循环（自己控制采集，不用 WakeWordListener） ----
-
     def _run_loop(self):
         try:
             import pyaudio
@@ -524,13 +431,59 @@ class VoiceProcessor:
                     wakeword_id = self._save_wakeword_audio(chunk, 16000, best)
                     buffer.clear()  # 清缓存，避免重复检测
 
-                    # 播"我在呢"（阻塞，等播完）
+                    # 播"我在呢"（阻塞）
                     self.play_sync("我在呢")
-                    threading.Thread(
-                        target=self._voice_pipeline,
-                        args=(wakeword_id,),
-                        daemon=True,
-                    ).start()
+
+                    # VAD 录音（阻塞）
+                    self.set_state(STATE_RECORDING)
+                    try:
+                        silence_ms = self._get_vad_silence()
+                        wav_path = vad_record(timeout_sec=_VAD_TIMEOUT, silence_ms=silence_ms)
+                    except Exception as e:
+                        logger.error("VAD 录音失败: %s", e)
+                        self.set_state(STATE_IDLE)
+                        self._update_wakeword_category(wakeword_id, "negative")
+                        continue
+
+                    # 声纹 + STT
+                    self.set_state(STATE_PROCESSING)
+                    user_id = "u_temp_voice"
+                    speaker = "未知用户"
+                    audio_path = wav_path
+                    text = ""
+                    try:
+                        user_id, speaker, audio_path = self._vp.detect(wav_path, wakeword_id)
+                    except Exception as e:
+                        logger.warning("声纹识别失败: %s", e)
+                    try:
+                        text = self._stt.transcribe(audio_path)
+                        logger.info("STT 结果: %s", text[:100])
+                    except Exception as e:
+                        logger.warning("STT 失败: %s", e)
+
+                    if not text.strip():
+                        logger.info("未检测到语音，跳过")
+                        self._update_wakeword_category(wakeword_id, "negative")
+                        self.set_state(STATE_IDLE)
+                        continue
+
+                    # brain POST
+                    url = cfg.get_service_url("brain_services", "/api/agent-request")
+                    req_body = {
+                        "protocol": "voice",
+                        "request_id": f"voice_{uuid.uuid4().hex[:12]}",
+                        "chat_type": "voice",
+                        "user_id": user_id,
+                        "content_type": "text",
+                        "content": text,
+                        "metadata": {"wakeword_id": wakeword_id, "speaker": speaker},
+                    }
+                    try:
+                        requests.post(url, json=req_body, timeout=10)
+                    except Exception as e:
+                        logger.error("brain_services 调用失败: %s", e)
+
+                    self.set_state(STATE_IDLE)
 
             stream.close()
             pa.terminate()
