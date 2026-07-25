@@ -75,8 +75,6 @@ class RssNewsDetector(BaseDetector):
         super().__init__()
         self._feeds: list[dict] = [f.model_dump() for f in _default_feeds]
         self._output_dir = "data/rss_news"
-        # 每个源上次执行的日期（同一天不重复触发）
-        self._last_check: dict[str, str | None] = {}
         self._state: dict[str, str] = {}  # feed_url → 最新 pubDate 原始字符串
 
     # ---- 状态持久化（本地 JSON 文件）----
@@ -87,20 +85,15 @@ class RssNewsDetector(BaseDetector):
                 with open(self._state_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 self._state = data.get("state", {})
-                self._last_check = data.get("last_check", {})
         except Exception as e:
             logger.warning("加载状态文件失败: %s", e)
             self._state = {}
-            self._last_check = {}
 
     def _save_state(self):
         try:
             os.makedirs(os.path.dirname(self._state_file), exist_ok=True)
             with open(self._state_file, "w", encoding="utf-8") as f:
-                json.dump({
-                    "state": self._state,
-                    "last_check": self._last_check,
-                }, f, ensure_ascii=False, indent=2)
+                json.dump({"state": self._state}, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.warning("保存状态文件失败: %s", e)
 
@@ -137,7 +130,6 @@ class RssNewsDetector(BaseDetector):
         now = datetime.now()
         today = now.strftime("%Y-%m-%d")
         for feed in self._feeds:
-            self._last_check.pop(feed["url"], None)  # 清日期标记
             try:
                 self._check_feed(feed, now, today, force=True)
             except Exception as e:
@@ -148,28 +140,24 @@ class RssNewsDetector(BaseDetector):
         feed_name = feed.get("name", feed_url)
         fetch_times = feed.get("fetch_times", ["04:00", "16:00"])
 
-        # 检查当前时间是否匹配该源的拉取时间（手动触发时跳过）
+        # 检查自上次运行后是否有拉取时间点已过（手动触发时跳过）
         if not force:
+            now_ts = time.time()
+            if self.last_run <= 0:
+                return  # 首次运行，跳过
+            day_start = int(datetime.combine(now.date(), dt_time(0, 0)).timestamp())
             matched = False
-            for t in fetch_times:
+            for t_str in fetch_times:
                 try:
-                    parts = t.strip().split(":")
-                    if now.hour == int(parts[0]) and now.minute == int(parts[1]):
+                    pts = t_str.strip().split(":")
+                    ft_ts = day_start + int(pts[0]) * 3600 + int(pts[1]) * 60
+                    if self.last_run < ft_ts <= now_ts:
                         matched = True
                         break
                 except Exception:
                     continue
             if not matched:
                 return
-
-        # 同一天不重复触发（同一个源一天内多次拉取需要配置多个时间点）
-        last_date = self._last_check.get(feed_url)
-        if last_date == today:
-            return
-        self._last_check[feed_url] = today
-
-        # 只记一次 save（减少磁盘写入）
-        need_save = False
 
         logger.info("拉取: %s", feed_name)
 
