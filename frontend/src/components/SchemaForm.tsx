@@ -1,7 +1,9 @@
 /** 通用 JSON Schema → Ant Design Form 渲染器 */
-import { Form, Input, InputNumber, Switch, Select, Button } from 'antd';
+import { Form, Input, InputNumber, Switch, Select, Button, Collapse, Typography } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
+
+const { Text } = Typography;
 
 interface SchemaFormProps {
   schema: Record<string, any>;
@@ -57,12 +59,13 @@ function renderFields(
   required?: string[],
   /** 为 true 时表单字段名用相对名（用于 Form.List 内部） */
   relative?: boolean,
+  form?: FormInstance,
 ) {
   return Object.entries(properties).map(([key, prop]) => {
     const label = prop.title || toTitle(key);
     const isRequired = required?.includes(key);
 
-    // 对象数组 → Form.List
+    // 对象数组 → Form.List + Collapse 折叠面板
     if (prop.type === 'array' && prop.items?.type === 'object' && prop.items?.properties) {
       const itemProps = prop.items.properties;
       const itemRequired = prop.items.required;
@@ -75,30 +78,39 @@ function renderFields(
           <Form.List name={key}>
             {(fields, { add, remove }) => (
               <>
-                {fields.map(({ key: fk, name: idx }) => (
-                  <div key={fk}
-                       style={{
-                         border: '1px solid #d9d9d9', borderRadius: 6, padding: '12px 12px 0',
-                         marginBottom: 8, position: 'relative',
-                       }}>
-                    <Button type="text" size="small" danger
-                            icon={<DeleteOutlined />}
-                            onClick={() => remove(idx)}
-                            style={{ position: 'absolute', top: 4, right: 4, zIndex: 1 }} />
-                    {Object.entries(itemProps).map(([sk, sp]) => {
-                      const sl = sp.title || toTitle(sk);
-                      const sr = itemRequired?.includes(sk);
+                {fields.length > 0 ? (
+                  <Collapse accordion size="small" style={{ marginBottom: 8 }}>
+                    {fields.map(({ key: fk, name: idx }) => {
+                      const itemData = form?.getFieldValue([key, idx]) || {};
+                      const panelTitle = itemData.name || itemData.title ||
+                        Object.values(itemData).find(v => typeof v === 'string' && v) ||
+                        `项目 ${idx + 1}`;
                       return (
-                        <Form.Item key={sk} name={[idx, sk]} label={sl}
-                                   extra={sp.description || undefined}
-                                   rules={sr ? [{ required: true, message: `${sl}不能为空` }] : []}
-                                   valuePropName={sp.type === 'boolean' ? 'checked' : undefined}>
-                          {renderControl(sp)}
-                        </Form.Item>
+                        <Collapse.Panel
+                          key={fk}
+                          header={<Text strong style={{ fontSize: 13 }}>{panelTitle}</Text>}
+                          extra={
+                            <Button type="text" size="small" danger icon={<DeleteOutlined />}
+                                    onClick={(e) => { e.stopPropagation(); remove(idx); }} />
+                          }
+                        >
+                          {Object.entries(itemProps).map(([sk, sp]) => {
+                            const sl = sp.title || toTitle(sk);
+                            const sr = itemRequired?.includes(sk);
+                            return (
+                              <Form.Item key={sk} name={[idx, sk]} label={sl}
+                                         extra={sp.description || undefined}
+                                         rules={sr ? [{ required: true, message: `${sl}不能为空` }] : []}
+                                         valuePropName={sp.type === 'boolean' ? 'checked' : undefined}>
+                                {renderControl(sp)}
+                              </Form.Item>
+                            );
+                          })}
+                        </Collapse.Panel>
                       );
                     })}
-                  </div>
-                ))}
+                  </Collapse>
+                ) : null}
                 <Button type="dashed" icon={<PlusOutlined />} block onClick={() => add({})}>
                   添加{label}
                 </Button>
@@ -125,7 +137,7 @@ function renderFields(
 export default function SchemaForm({ schema, form }: SchemaFormProps) {
   return (
     <Form form={form} layout="vertical">
-      {renderFields(schema?.properties || {}, schema?.required)}
+      {renderFields(schema?.properties || {}, schema?.required, false, form)}
     </Form>
   );
 }

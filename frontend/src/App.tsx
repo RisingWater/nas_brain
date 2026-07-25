@@ -1,12 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AdminLayout from './components/AdminLayout';
 import UserList from './pages/UserList';
+import UserConfigDetail from './pages/UserConfigDetail';
 import ServiceManager from './pages/ServiceManager';
 import LogViewer from './pages/LogViewer';
 import ToolManager from './pages/ToolManager';
 import TTSCacheManager from './pages/TTSCacheManager';
 import ScheduleManager from './pages/ScheduleManager';
 import DetectorManager from './pages/DetectorManager';
+import DetectorConfigDetail from './pages/DetectorConfigDetail';
 import ProcessorManager from './pages/ProcessorManager';
 import ChatHistory from './pages/ChatHistory';
 import MemoryManager from './pages/MemoryManager';
@@ -25,12 +27,14 @@ export default function App() {
         <Route element={<AdminLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/users" element={<UserList />} />
+          <Route path="/users/:userId/config" element={<UserConfigDetail />} />
           <Route path="/services" element={<ServiceManager />} />
           <Route path="/logs" element={<LogViewer />} />
           <Route path="/tools" element={<ToolManager />} />
           <Route path="/tts-cache" element={<TTSCacheManager />} />
           <Route path="/schedules" element={<ScheduleManager />} />
           <Route path="/detectors" element={<DetectorManager />} />
+          <Route path="/detectors/:name/config" element={<DetectorConfigDetail />} />
           <Route path="/processors" element={<ProcessorManager />} />
           <Route path="/chat-history" element={<ChatHistory />} />
           <Route path="/memory" element={<MemoryManager />} />
