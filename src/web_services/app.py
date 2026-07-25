@@ -313,6 +313,11 @@ async def proxy_user_configs_list(request: Request):
     return await _proxy_to_db("/api/user-configs", request)
 
 
+@app.api_route("/api/admin/user-configs/ice-breaker-candidates", methods=["GET"])
+async def proxy_ice_breaker_candidates(request: Request):
+    return await _proxy_to_db("/api/user-configs/ice-breaker-candidates", request)
+
+
 @app.api_route("/api/admin/user-configs/{user_id}", methods=["GET", "PUT", "DELETE"])
 async def proxy_user_configs_detail(user_id: str, request: Request):
     return await _proxy_to_db(f"/api/user-configs/{user_id}", request)

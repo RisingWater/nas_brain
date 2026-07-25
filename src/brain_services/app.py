@@ -10,6 +10,7 @@ from .routes import agent, tools_mgmt, processors_mgmt, strategy_mgmt, status
 from .tools.plugin_manager import load_tools
 from .processors.plugin_manager import load_all as load_processors
 from .strategy.summarizer import summarizer
+from .ice_breaker import ice_breaker_engine
 
 logger = logging.getLogger("brain_services")
 
@@ -24,7 +25,10 @@ async def lifespan(app: FastAPI):
     logger.info("处理器加载完成: %d 个", pcount)
     # 启动中期记忆总结器（30 分钟间隔）
     summarizer.start(interval_seconds=1800)
+    # 启动冰点引擎（群聊冷场主动发言）
+    ice_breaker_engine.start()
     yield
+    ice_breaker_engine.stop()
     summarizer.stop()
 
 

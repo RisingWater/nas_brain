@@ -10,6 +10,12 @@ export interface UserConfig {
   group_at_only: boolean;
   created_at: string | null;
   updated_at: string | null;
+  ice_breaker_enabled: boolean;
+  ice_breaker_prompt: string;
+  ice_breaker_trigger_minutes: number;
+  ice_breaker_cooldown_minutes: number;
+  ice_breaker_sleep_start: string;
+  ice_breaker_sleep_end: string;
 }
 
 export interface UserConfigUpdate {
@@ -19,6 +25,12 @@ export interface UserConfigUpdate {
   allowed_processors?: string[] | null;
   short_term_window?: number;
   group_at_only?: boolean;
+  ice_breaker_enabled?: boolean;
+  ice_breaker_prompt?: string;
+  ice_breaker_trigger_minutes?: number;
+  ice_breaker_cooldown_minutes?: number;
+  ice_breaker_sleep_start?: string;
+  ice_breaker_sleep_end?: string;
 }
 
 export interface UserConfigListItem {

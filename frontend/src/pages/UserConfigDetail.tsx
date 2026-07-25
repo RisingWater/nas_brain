@@ -53,6 +53,12 @@ export default function UserConfigDetail() {
           allowed_processors: config.allowed_processors || [],
           short_term_window: config.short_term_window,
           group_at_only: config.group_at_only,
+          ice_breaker_enabled: config.ice_breaker_enabled,
+          ice_breaker_prompt: config.ice_breaker_prompt || '',
+          ice_breaker_trigger_minutes: config.ice_breaker_trigger_minutes ?? 15,
+          ice_breaker_cooldown_minutes: config.ice_breaker_cooldown_minutes ?? 60,
+          ice_breaker_sleep_start: config.ice_breaker_sleep_start || '01:00',
+          ice_breaker_sleep_end: config.ice_breaker_sleep_end || '08:00',
         });
       } catch {
         message.error('加载配置失败');
@@ -75,6 +81,15 @@ export default function UserConfigDetail() {
         allowed_processors: values.strategy === 'direct' ? (values.allowed_processors?.length ? values.allowed_processors : null) : null,
         short_term_window: values.short_term_window,
         group_at_only: userInfo?.user_type === 'group' ? values.group_at_only : undefined,
+        // 冰点字段（仅群用户）
+        ...(userInfo?.user_type === 'group' ? {
+          ice_breaker_enabled: values.ice_breaker_enabled,
+          ice_breaker_prompt: values.ice_breaker_prompt || '',
+          ice_breaker_trigger_minutes: values.ice_breaker_trigger_minutes,
+          ice_breaker_cooldown_minutes: values.ice_breaker_cooldown_minutes,
+          ice_breaker_sleep_start: values.ice_breaker_sleep_start,
+          ice_breaker_sleep_end: values.ice_breaker_sleep_end,
+        } : {}),
       };
       await updateUserConfig(userId, payload);
       message.success('配置已保存');
@@ -211,6 +226,40 @@ export default function UserConfigDetail() {
           </Form.Item>
         </Form>
       </Card>
+
+      {/* 冰点配置 — 仅群用户 */}
+      {userInfo?.user_type === 'group' && (
+        <Card size="small" title="主动发言（冰点）" style={{ marginTop: 16 }}>
+          <Form.Item name="ice_breaker_enabled" label="启用冰点" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.ice_breaker_enabled !== cur.ice_breaker_enabled}>
+            {({ getFieldValue }) => getFieldValue('ice_breaker_enabled') ? (
+              <>
+                <Form.Item name="ice_breaker_prompt" label="冰点提示词"
+                           tooltip="发送给 LLM 的独立提示词，用于生成主动发言内容">
+                  <Input.TextArea rows={3} placeholder="请输入冰点提示词..." />
+                </Form.Item>
+                <Form.Item name="ice_breaker_trigger_minutes" label="沉默触发时间（分钟）"
+                           tooltip="群聊无人发言超过此时间后触发">
+                  <InputNumber min={1} max={1440} style={{ width: 200 }} />
+                </Form.Item>
+                <Form.Item name="ice_breaker_cooldown_minutes" label="冷却间隔（分钟）"
+                           tooltip="两次主动发言之间的最短间隔">
+                  <InputNumber min={5} max={1440} style={{ width: 200 }} />
+                </Form.Item>
+                <Form.Item name="ice_breaker_sleep_start" label="免打扰开始时间" tooltip="HH:MM 格式">
+                  <Input placeholder="01:00" style={{ width: 120 }} />
+                </Form.Item>
+                <Form.Item name="ice_breaker_sleep_end" label="免打扰结束时间" tooltip="HH:MM 格式">
+                  <Input placeholder="08:00" style={{ width: 120 }} />
+                </Form.Item>
+              </>
+            ) : null}
+          </Form.Item>
+        </Card>
+      )}
     </div>
   );
 }

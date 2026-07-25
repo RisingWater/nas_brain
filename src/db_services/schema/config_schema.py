@@ -10,6 +10,13 @@ class UserConfigUpdateRequest(BaseModel):
     allowed_processors: Optional[List[str]] = None  # null=全部处理器
     short_term_window: Optional[int] = Field(None, ge=1, le=1440)
     group_at_only: Optional[bool] = None
+    # 冰点（主动发言）
+    ice_breaker_enabled: Optional[bool] = None
+    ice_breaker_prompt: Optional[str] = None
+    ice_breaker_trigger_minutes: Optional[int] = Field(None, ge=1)
+    ice_breaker_cooldown_minutes: Optional[int] = Field(None, ge=5)
+    ice_breaker_sleep_start: Optional[str] = None
+    ice_breaker_sleep_end: Optional[str] = None
 
 
 class UserConfigResponse(BaseModel):
@@ -22,3 +29,10 @@ class UserConfigResponse(BaseModel):
     group_at_only: bool
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    # 冰点
+    ice_breaker_enabled: bool = False
+    ice_breaker_prompt: str = ""
+    ice_breaker_trigger_minutes: int = 15
+    ice_breaker_cooldown_minutes: int = 60
+    ice_breaker_sleep_start: str = "01:00"
+    ice_breaker_sleep_end: str = "08:00"
