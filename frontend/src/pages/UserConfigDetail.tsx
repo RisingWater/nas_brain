@@ -207,7 +207,16 @@ export default function UserConfigDetail() {
   const proactiveTab = hasWechat ? (
     <>
       <Form.Item name="ice_breaker_enabled" label="启用主动发言" valuePropName="checked">
-        <Switch />
+        <Switch onChange={(checked) => {
+          if (checked) {
+            const cur = form.getFieldValue('ice_breaker_prompt');
+            if (!cur) {
+              form.setFieldsValue({
+                ice_breaker_prompt: form.getFieldValue('system_prompt') || '',
+              });
+            }
+          }
+        }} />
       </Form.Item>
 
       <Form.Item noStyle shouldUpdate={true}>
