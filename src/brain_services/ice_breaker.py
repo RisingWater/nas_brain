@@ -11,7 +11,7 @@ import threading
 import requests
 from datetime import datetime
 from src.common.utils import cfg
-from .strategy.context_builder import LLMContextBuilder
+from .strategy.context_builder import LLMContextBuilder, _DEFAULT_SYSTEM_PROMPT
 from .strategy.llm_handler import LLMHandler
 
 logger = logging.getLogger("brain_services.ice_breaker")
@@ -225,8 +225,7 @@ class IceBreakerEngine:
             ice_prompt = config.get("ice_breaker_prompt", "").strip()
             ori_prompt = (config.get("system_prompt") or "").strip()
             if not ori_prompt:
-                _bot = os.getenv("BOT_NAME", "NAS Brain")
-                ori_prompt = f"你是 {_bot}，一个智能助手。请用中文回答用户的问题。"
+                ori_prompt = _DEFAULT_SYSTEM_PROMPT
 
             if ice_prompt:
                 combined_prompt = f"{ori_prompt}\n\n{ice_prompt}"
