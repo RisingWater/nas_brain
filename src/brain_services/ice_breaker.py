@@ -230,6 +230,17 @@ class IceBreakerEngine:
     def _generate_and_send(self, user_id: str, wechat_name: str, config: dict, latest_msg: dict):
         """用 LLM 生成主动发言消息并发送"""
         try:
+            # 保证有 system_prompt（candidates 端点通常带，测试入口可能缺）
+            if not config.get("system_prompt"):
+                try:
+                    url = cfg.get_service_url("db_services", f"/api/user-configs/{user_id}")
+                    resp = requests.get(url, timeout=10)
+                    if resp.status_code == 200:
+                        full = resp.json()
+                        config["system_prompt"] = full.get("system_prompt", "")
+                except Exception:
+                    pass
+
             user_type = config.get("user_type", "person")
 
             # 确定触发语：ice_breaker_prompt 用户可自定义，空则用默认
