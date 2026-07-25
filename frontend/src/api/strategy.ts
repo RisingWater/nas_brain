@@ -82,3 +82,11 @@ export async function listProcessors(): Promise<ProcessorInfo[]> {
   const { data } = await client.get('/processors');
   return data.data;
 }
+
+export async function triggerIceBreaker(userId: string, wechatName: string, prompt: string): Promise<void> {
+  await client.post('/admin/ice-breaker/trigger', {
+    user_id: userId,
+    wechat_name: wechatName,
+    prompt: prompt,
+  });
+}

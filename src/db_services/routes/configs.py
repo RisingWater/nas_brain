@@ -100,12 +100,13 @@ def list_user_configs(limit: int = 200, offset: int = 0):
 
 @router.get("/ice-breaker-candidates")
 def get_ice_breaker_candidates():
-    """返回所有启用了冰点的群配置（供 brain_services 后台循环使用）"""
+    """返回所有启用了主动发言且配置了微信名的用户（供 brain_services 后台循环使用）"""
     conn = db.get_connection()
     rows = conn.execute(
         """SELECT uc.*, u.wechat_name FROM user_configs uc
            JOIN users u ON uc.user_id = u.user_id
-           WHERE u.user_type = 'group' AND uc.ice_breaker_enabled = 1
+           WHERE u.wechat_name IS NOT NULL AND u.wechat_name != ''
+             AND uc.ice_breaker_enabled = 1
            ORDER BY uc.updated_at DESC""",
     ).fetchall()
     items = []

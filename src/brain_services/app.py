@@ -11,6 +11,7 @@ from .tools.plugin_manager import load_tools
 from .processors.plugin_manager import load_all as load_processors
 from .strategy.summarizer import summarizer
 from .ice_breaker import ice_breaker_engine
+from .routes import ice_breaker as ice_breaker_route
 
 logger = logging.getLogger("brain_services")
 
@@ -25,8 +26,9 @@ async def lifespan(app: FastAPI):
     logger.info("处理器加载完成: %d 个", pcount)
     # 启动中期记忆总结器（30 分钟间隔）
     summarizer.start(interval_seconds=1800)
-    # 启动冰点引擎（群聊冷场主动发言）
+    # 启动主动发言引擎
     ice_breaker_engine.start()
+    ice_breaker_route.set_engine(ice_breaker_engine)
     yield
     ice_breaker_engine.stop()
     summarizer.stop()
@@ -39,6 +41,7 @@ app.include_router(tools_mgmt.router, prefix="/api/tools", tags=["工具管理"]
 app.include_router(processors_mgmt.router, prefix="/api/processors", tags=["处理器管理"])
 app.include_router(strategy_mgmt.router, prefix="/api/strategy", tags=["策略管理"])
 app.include_router(status.router, prefix="/api", tags=["AI 状态"])
+app.include_router(ice_breaker_route.router, prefix="/api", tags=["主动发言"])
 
 
 @app.get("/health")

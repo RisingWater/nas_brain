@@ -512,6 +512,12 @@ async def proxy_ai_status(request: Request):
     return await _proxy_to_brain(path, request)
 
 
+# ---- 代理 /api/admin/ice-breaker/trigger → brain_services:9031 ----
+@app.api_route("/api/admin/ice-breaker/trigger", methods=["POST"])
+async def proxy_ice_breaker_trigger(request: Request):
+    return await _proxy_to_brain("/api/ice-breaker/trigger", request)
+
+
 # ---- WebSocket：AI 状态实时推送 ----
 from .ws_manager import ws_endpoint, notify_state_change
 from fastapi import WebSocket

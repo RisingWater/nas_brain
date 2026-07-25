@@ -205,6 +205,20 @@ class IceBreakerEngine:
             logger.error("查询回应失败: %s", e)
         return False
 
+    def generate_and_send(self, user_id: str, wechat_name: str, prompt_override: str = ""):
+        """公开接口：立即生成并发送主动发言（测试用）"""
+        config = {"ice_breaker_prompt": prompt_override} if prompt_override else {}
+        if not config.get("ice_breaker_prompt"):
+            # 从 db_services 拉取实时配置
+            try:
+                url = cfg.get_service_url("db_services", f"/api/user-configs/{user_id}")
+                resp = requests.get(url, timeout=10)
+                if resp.status_code == 200:
+                    config = resp.json()
+            except Exception:
+                pass
+        self._generate_and_send(user_id, wechat_name, config, {})
+
     def _generate_and_send(self, user_id: str, wechat_name: str, config: dict, latest_msg: dict):
         """用 LLM 生成冰点消息并发送"""
         try:

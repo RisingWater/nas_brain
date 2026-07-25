@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
   Typography, Button, Space, Card, Descriptions, Tag, Form, message,
-  Radio, Input, InputNumber, Switch, Transfer, Spin,
+  Radio, Input, InputNumber, Switch, Transfer, Spin, Tabs,
 } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { TransferItem } from 'antd/es/transfer';
 import {
   getUserConfig, updateUserConfig, listUsers, listTools, listProcessors,
+  triggerIceBreaker,
 } from '../api/strategy';
 import type { UserConfigUpdate, ToolInfo, ProcessorInfo } from '../api/strategy';
 
@@ -21,9 +22,12 @@ export default function UserConfigDetail() {
   const [userInfo, setUserInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [allTools, setAllTools] = useState<TransferItem[]>([]);
   const [allProcessors, setAllProcessors] = useState<TransferItem[]>([]);
   const [form] = Form.useForm();
+
+  const hasWechat = !!(userInfo?.wechat_name);
 
   useEffect(() => {
     if (!userId) return;
@@ -81,8 +85,7 @@ export default function UserConfigDetail() {
         allowed_processors: values.strategy === 'direct' ? (values.allowed_processors?.length ? values.allowed_processors : null) : null,
         short_term_window: values.short_term_window,
         group_at_only: userInfo?.user_type === 'group' ? values.group_at_only : undefined,
-        // 冰点字段（仅群用户）
-        ...(userInfo?.user_type === 'group' ? {
+        ...(hasWechat ? {
           ice_breaker_enabled: values.ice_breaker_enabled,
           ice_breaker_prompt: values.ice_breaker_prompt || '',
           ice_breaker_trigger_minutes: values.ice_breaker_trigger_minutes,
@@ -101,9 +104,151 @@ export default function UserConfigDetail() {
     }
   };
 
+  const handleTestTrigger = async () => {
+    if (!userId || !userInfo?.wechat_name) return;
+    const prompt = form.getFieldValue('ice_breaker_prompt') || '';
+    if (!prompt) {
+      message.warning('请先填写主动发言提示词');
+      return;
+    }
+    setTesting(true);
+    try {
+      await triggerIceBreaker(userId, userInfo.wechat_name, prompt);
+      message.success('已触发主动发言，请查看微信');
+    } catch {
+      message.error('触发失败');
+    } finally {
+      setTesting(false);
+    }
+  };
+
   if (loading) {
     return <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>;
   }
+
+  const basicTab = (
+    <>
+      <Form.Item name="strategy" label="处理策略" rules={[{ required: true }]}>
+        <Radio.Group>
+          <Radio value="smart">
+            <Text strong>Smart</Text>
+            <Text type="secondary"> — LLM + 工具调用，自动回复</Text>
+          </Radio>
+          <br />
+          <Radio value="direct">
+            <Text strong>Direct</Text>
+            <Text type="secondary"> — 处理器直出，指定处理器处理</Text>
+          </Radio>
+          <br />
+          <Radio value="ignore">
+            <Text strong>Ignore</Text>
+            <Text type="secondary"> — 只记录聊天记录，不处理</Text>
+          </Radio>
+        </Radio.Group>
+      </Form.Item>
+
+      <Form.Item name="system_prompt" label="System Prompt（身份设定）">
+        <Input.TextArea rows={3} placeholder={DEFAULT_SYSTEM_PROMPT} />
+      </Form.Item>
+
+      {/* Smart 模式：工具选择 */}
+      <Form.Item noStyle shouldUpdate={(prev, cur) => prev.strategy !== cur.strategy}>
+        {({ getFieldValue }) => {
+          if (getFieldValue('strategy') !== 'smart') return null;
+          return (
+            <Form.Item name="allowed_tools" label="允许的工具（左侧=已选，右侧=全部）"
+                       valuePropName="targetKeys">
+              <Transfer
+                dataSource={allTools}
+                render={(item) => `${item.title} — ${item.description}`}
+                titles={['已选', '全部']}
+                listStyle={{ width: 240, height: 260 }}
+                showSearch
+                filterOption={(v, item) => (item.title as string || '').includes(v)}
+              />
+            </Form.Item>
+          );
+        }}
+      </Form.Item>
+
+      {/* Direct 模式：处理器选择 */}
+      <Form.Item noStyle shouldUpdate={(prev, cur) => prev.strategy !== cur.strategy}>
+        {({ getFieldValue }) => {
+          if (getFieldValue('strategy') !== 'direct') return null;
+          return (
+            <Form.Item name="allowed_processors" label="允许的处理器（左侧=已选，右侧=全部）"
+                       valuePropName="targetKeys">
+              <Transfer
+                dataSource={allProcessors}
+                render={(item) => `${item.title} — ${item.description}`}
+                titles={['已选', '全部']}
+                listStyle={{ width: 240, height: 260 }}
+                showSearch
+                filterOption={(v, item) => (item.title as string || '').includes(v)}
+              />
+            </Form.Item>
+          );
+        }}
+      </Form.Item>
+
+      {/* 群用户：@ 配置 */}
+      {userInfo?.user_type === 'group' && (
+        <Form.Item name="group_at_only" label="群聊仅 @ 时回复" valuePropName="checked">
+          <Switch />
+        </Form.Item>
+      )}
+
+      <Form.Item name="short_term_window" label="短期记忆窗口（分钟）" rules={[{ required: true }]}>
+        <InputNumber min={5} max={1440} style={{ width: 200 }} />
+      </Form.Item>
+    </>
+  );
+
+  const proactiveTab = hasWechat ? (
+    <>
+      <Form.Item name="ice_breaker_enabled" label="启用主动发言" valuePropName="checked">
+        <Switch />
+      </Form.Item>
+
+      <Form.Item noStyle shouldUpdate={true}>
+        {({ getFieldValue }) => {
+          if (!getFieldValue('ice_breaker_enabled')) return null;
+          return (
+            <>
+              <Form.Item name="ice_breaker_prompt" label="主动发言提示词"
+                         tooltip="发送给 LLM 的独立提示词，用于生成主动发言内容">
+                <Input.TextArea rows={3} placeholder="请输入提示词..." />
+              </Form.Item>
+              <Form.Item name="ice_breaker_trigger_minutes" label="沉默触发时间（分钟）"
+                         tooltip="用户/群聊无人发言超过此时间后触发">
+                <InputNumber min={1} max={1440} style={{ width: 200 }} />
+              </Form.Item>
+              <Form.Item name="ice_breaker_cooldown_minutes" label="冷却间隔（分钟）"
+                         tooltip="两次主动发言之间的最短间隔">
+                <InputNumber min={5} max={1440} style={{ width: 200 }} />
+              </Form.Item>
+              <Form.Item name="ice_breaker_sleep_start" label="免打扰开始时间" tooltip="HH:MM 格式">
+                <Input placeholder="01:00" style={{ width: 120 }} />
+              </Form.Item>
+              <Form.Item name="ice_breaker_sleep_end" label="免打扰结束时间" tooltip="HH:MM 格式">
+                <Input placeholder="08:00" style={{ width: 120 }} />
+              </Form.Item>
+              <Form.Item>
+                <Button icon={<ThunderboltOutlined />} loading={testing} onClick={handleTestTrigger}>
+                  立即发言（测试提示词）
+                </Button>
+                <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                  点击后立即用当前提示词生成一条消息发送
+                </Text>
+              </Form.Item>
+            </>
+          );
+        }}
+      </Form.Item>
+    </>
+  ) : (
+    <Text type="secondary">该用户未配置微信名称，无法使用主动发言功能。</Text>
+  );
 
   return (
     <div>
@@ -140,8 +285,7 @@ export default function UserConfigDetail() {
         </Card>
       )}
 
-      {/* 策略表单 */}
-      <Card size="small" title="配置">
+      <Card size="small">
         <Form form={form} layout="vertical"
               initialValues={{
                 strategy: 'ignore',
@@ -150,116 +294,12 @@ export default function UserConfigDetail() {
                 short_term_window: 30,
                 group_at_only: true,
               }}>
-
-          <Form.Item name="strategy" label="处理策略" rules={[{ required: true }]}>
-            <Radio.Group>
-              <Radio value="smart">
-                <Text strong>Smart</Text>
-                <Text type="secondary"> — LLM + 工具调用，自动回复</Text>
-              </Radio>
-              <br />
-              <Radio value="direct">
-                <Text strong>Direct</Text>
-                <Text type="secondary"> — 处理器直出，指定处理器处理</Text>
-              </Radio>
-              <br />
-              <Radio value="ignore">
-                <Text strong>Ignore</Text>
-                <Text type="secondary"> — 只记录聊天记录，不处理</Text>
-              </Radio>
-            </Radio.Group>
-          </Form.Item>
-
-          <Form.Item name="system_prompt" label="System Prompt（身份设定）">
-            <Input.TextArea rows={3} placeholder={DEFAULT_SYSTEM_PROMPT} />
-          </Form.Item>
-
-          {/* Smart 模式：工具选择 */}
-          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.strategy !== cur.strategy}>
-            {({ getFieldValue }) => {
-              if (getFieldValue('strategy') !== 'smart') return null;
-              return (
-                <Form.Item name="allowed_tools" label="允许的工具（左侧=已选，右侧=全部）"
-                           valuePropName="targetKeys">
-                  <Transfer
-                    dataSource={allTools}
-                    render={(item) => `${item.title} — ${item.description}`}
-                    titles={['已选', '全部']}
-                    listStyle={{ width: 240, height: 260 }}
-                    showSearch
-                    filterOption={(v, item) => (item.title as string || '').includes(v)}
-                  />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-
-          {/* Direct 模式：处理器选择 */}
-          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.strategy !== cur.strategy}>
-            {({ getFieldValue }) => {
-              if (getFieldValue('strategy') !== 'direct') return null;
-              return (
-                <Form.Item name="allowed_processors" label="允许的处理器（左侧=已选，右侧=全部）"
-                           valuePropName="targetKeys">
-                  <Transfer
-                    dataSource={allProcessors}
-                    render={(item) => `${item.title} — ${item.description}`}
-                    titles={['已选', '全部']}
-                    listStyle={{ width: 240, height: 260 }}
-                    showSearch
-                    filterOption={(v, item) => (item.title as string || '').includes(v)}
-                  />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-
-          {/* 群用户：@ 配置 */}
-          {userInfo?.user_type === 'group' && (
-            <Form.Item name="group_at_only" label="群聊仅 @ 时回复" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-          )}
-
-          <Form.Item name="short_term_window" label="短期记忆窗口（分钟）" rules={[{ required: true }]}>
-            <InputNumber min={5} max={1440} style={{ width: 200 }} />
-          </Form.Item>
+          <Tabs items={[
+            { key: 'basic', label: '基础配置', children: basicTab },
+            { key: 'proactive', label: '主动发言', children: proactiveTab },
+          ]} />
         </Form>
       </Card>
-
-      {/* 冰点配置 — 仅群用户 */}
-      {userInfo?.user_type === 'group' && (
-        <Card size="small" title="主动发言（冰点）" style={{ marginTop: 16 }}>
-          <Form.Item name="ice_breaker_enabled" label="启用冰点" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-
-          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.ice_breaker_enabled !== cur.ice_breaker_enabled}>
-            {({ getFieldValue }) => getFieldValue('ice_breaker_enabled') ? (
-              <>
-                <Form.Item name="ice_breaker_prompt" label="冰点提示词"
-                           tooltip="发送给 LLM 的独立提示词，用于生成主动发言内容">
-                  <Input.TextArea rows={3} placeholder="请输入冰点提示词..." />
-                </Form.Item>
-                <Form.Item name="ice_breaker_trigger_minutes" label="沉默触发时间（分钟）"
-                           tooltip="群聊无人发言超过此时间后触发">
-                  <InputNumber min={1} max={1440} style={{ width: 200 }} />
-                </Form.Item>
-                <Form.Item name="ice_breaker_cooldown_minutes" label="冷却间隔（分钟）"
-                           tooltip="两次主动发言之间的最短间隔">
-                  <InputNumber min={5} max={1440} style={{ width: 200 }} />
-                </Form.Item>
-                <Form.Item name="ice_breaker_sleep_start" label="免打扰开始时间" tooltip="HH:MM 格式">
-                  <Input placeholder="01:00" style={{ width: 120 }} />
-                </Form.Item>
-                <Form.Item name="ice_breaker_sleep_end" label="免打扰结束时间" tooltip="HH:MM 格式">
-                  <Input placeholder="08:00" style={{ width: 120 }} />
-                </Form.Item>
-              </>
-            ) : null}
-          </Form.Item>
-        </Card>
-      )}
     </div>
   );
 }

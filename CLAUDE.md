@@ -226,45 +226,49 @@ System Prompt、工具白名单、处理器白名单、记忆窗口等。
 
 群用户额外支持「冰点（主动发言）」配置：冰点开关、独立提示词、沉默触发时间、冷却间隔、免打扰时段。
 
-## 冰点引擎（Ice Breaker）
+## 主动发言引擎（Ice Breaker）
 
-`src/brain_services/ice_breaker.py` — brain_services 后台线程，定期检查群聊冷场并主动发言。
+`src/brain_services/ice_breaker.py` — brain_services 后台线程，定期检查冷场并主动发言。
 
 ### 配置方式
 
-在用户策略配置页面启用冰点（仅群用户），可配置：
-- **冰点提示词**：独立的 LLM 提示词，与正常回复的 system prompt 分开
-- **沉默触发时间**：群聊沉默多久后触发（默认 15 分钟）
+在用户策略配置页面的「主动发言」Tab 中配置（需要用户配置了微信名称），可配置：
+- **主动发言提示词**：独立的 LLM 提示词，与正常回复的 system prompt 分开
+- **沉默触发时间**：沉默多久后触发（默认 15 分钟）
 - **冷却间隔**：两次主动发言的最短间隔（默认 60 分钟）
 - **免打扰时段**：夜间不发言（默认 01:00-08:00）
+
+支持所有配置了微信名称的用户（个人和群均可）。
 
 ### 工作流程
 
 ```
 后台线程（每 30~40 分钟 tick，随机扰动 5-10 分钟）:
-  1. GET /api/user-configs/ice-breaker-candidates → 启用了冰点的群
-  2. 对每个群:
+  1. GET /api/user-configs/ice-breaker-candidates → 启用了主动发言的用户
+  2. 对每个用户:
      a. 免打扰时段检查
      b. 当天已触发且无人回应 → 跳过
      c. 查最新消息时间 → 冷场检查
      d. 冷却检查
-     e. 用冰点提示词 + LLM 生成消息
-     f. 发送到群
+     e. 用主动发言提示词 + LLM 生成消息
+     f. 发送到微信
 ```
 
-- 冰点内容绕过 `group_at_only` 检查（自动包含 `@BOT_NAME`）
+- 主动发言绕过 `group_at_only` 检查（自动包含 `@BOT_NAME`）
 - 不暴露工具给 LLM（`tools=[]`），只生成纯文本
-- **无人回应策略**：如果 AI 发言后无人理睬，当天不再对该群触发
+- **无人回应策略**：如果 AI 发言后无人理睬，当天不再对该用户触发
+- 支持「立即发言」测试按钮（用户配置页 → 主动发言 Tab → 立即发言）
 - 状态全在内存中，重启后安全重置
 
 ### 关键文件
 
 | 文件 | 功能 |
 |------|------|
-| `src/brain_services/ice_breaker.py` | 冰点引擎（后台循环 + 状态管理） |
+| `src/brain_services/ice_breaker.py` | 主动发言引擎（后台循环 + 状态管理） |
+| `src/brain_services/routes/ice_breaker.py` | 测试触发 API |
 | `src/brain_services/app.py` | lifespan 中启动/停止 |
-| `src/db_services/routes/configs.py` | 存储冰点配置 + candidates 端点 |
-| `frontend/src/pages/UserConfigDetail.tsx` | 冰点配置 UI |
+| `src/db_services/routes/configs.py` | 存储配置 + candidates 端点 |
+| `frontend/src/pages/UserConfigDetail.tsx` | 配置 UI（含测试按钮） |
 
 ## 语音网关（voice_gateway）
 
