@@ -4,7 +4,7 @@ export interface DashboardStats {
   system: {
     memory_services: Record<string, number>;
     memory_total_kb: number;
-    cpu: { load_1m: number; load_5m: number; load_15m: number; cores: number; pct: number };
+    cpu: { load_1m: number; load_5m: number; load_15m: number; cores: number; pct: number; services: Record<string, number> };
   };
   storage: {
     db_size: number;

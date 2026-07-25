@@ -91,12 +91,16 @@ export default function Dashboard() {
     { name: '剩余', value: memRemaining },
   ];
 
-  // CPU
+  // CPU 各服务占比
+  const cpuServices = s.system.cpu.services || {};
+  const cpuTotal = Object.values(cpuServices).reduce((a, b) => a + b, 0);
   const cpuPct = s.system.cpu.pct || 0;
   const cpuData = [
-    { name: '使用', value: cpuPct },
-    { name: '空闲', value: Math.max(0, 100 - cpuPct) },
+    ...Object.entries(cpuServices).filter(([, v]) => v > 0).map(([k, v]) => ({ name: serviceLabels[k] || k, value: v })),
   ];
+  const cpuDetail = Object.entries(cpuServices)
+    .filter(([, v]) => v > 0)
+    .map(([k, v], i) => ({ label: serviceLabels[k] || k, pct: v, color: MEM_PIE_COLORS[i % MEM_PIE_COLORS.length] }));
 
   const storageDetail = [
     { label: '数据库', size: s.storage.db_size, color: STORAGE_PIE_COLORS[0] },
@@ -172,27 +176,26 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card size="small" title={<span><ThunderboltOutlined /> CPU</span>}>
+          <Card size="small" title={<span><ThunderboltOutlined /> CPU（总计 {cpuPct}%）</span>}>
             <div style={{ textAlign: 'center' }}>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
-                  <Pie data={cpuData} dataKey="value" cx="50%" cy="50%" outerRadius={80} innerRadius={50}>
-                    <Cell fill="#ff4d4f" /><Cell fill="#e8e8e8" />
+                  <Pie data={cpuData} dataKey="value" cx="50%" cy="50%" outerRadius={80} innerRadius={35}>
+                    {cpuData.map((_, idx) => (<Cell key={idx} fill={MEM_PIE_COLORS[idx % MEM_PIE_COLORS.length]} />))}
                   </Pie>
                   <Tooltip formatter={(v: number) => `${v}%`} />
                 </PieChart>
               </ResponsiveContainer>
-              <Text strong style={{ fontSize: 24, color: cpuPct > 80 ? '#ff4d4f' : '#52c41a' }}>{cpuPct}%</Text>
             </div>
-            <div style={{ marginTop: 8, fontSize: 13 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                <span>核数</span><span>{s.system.cpu.cores} 核</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                <span>Load 1m</span><span>{s.system.cpu.load_1m.toFixed(2)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                <span>Load 5m</span><span>{s.system.cpu.load_5m.toFixed(2)}</span>
+            <div style={{ marginTop: 8 }}>
+              {cpuDetail.map(d => (
+                <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: 13 }}>
+                  <span><span style={{ color: d.color, marginRight: 6 }}>●</span>{d.label}</span>
+                  <span>{d.pct}%</span>
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: 13, color: '#999', marginTop: 4 }}>
+                <span>核数 {s.system.cpu.cores} · Load {s.system.cpu.load_1m.toFixed(2)}</span>
               </div>
             </div>
           </Card>
