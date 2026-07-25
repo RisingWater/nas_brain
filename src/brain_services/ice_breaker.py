@@ -223,16 +223,15 @@ class IceBreakerEngine:
         """用 LLM 生成冰点消息并发送"""
         try:
             ice_prompt = config.get("ice_breaker_prompt", "").strip()
-            if not ice_prompt:
-                logger.warning("群 %s 冰点提示词为空", user_id)
-                return
-
-            # 保留原有 system_prompt + 叠加主动发言提示词
             ori_prompt = (config.get("system_prompt") or "").strip()
-            if ori_prompt:
+            if not ori_prompt:
+                _bot = os.getenv("BOT_NAME", "NAS Brain")
+                ori_prompt = f"你是 {_bot}，一个智能助手。请用中文回答用户的问题。"
+
+            if ice_prompt:
                 combined_prompt = f"{ori_prompt}\n\n{ice_prompt}"
             else:
-                combined_prompt = ice_prompt
+                combined_prompt = ori_prompt
 
             # 构建上下文（含三层记忆 + 近期聊天）
             messages = self.context_builder.build(
