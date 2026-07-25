@@ -39,6 +39,7 @@ class VoiceProcessor:
         self._thread: threading.Thread | None = None
         self._stt = STT()
         self._vp = VoiceprintEngine()
+        self._play_queue: queue.Queue = queue.Queue()
 
     # ---- 公开方法 ----
 
@@ -148,10 +149,24 @@ class VoiceProcessor:
                     print(f"[ERROR] 关闭 stream 异常: {e}")
                     print(traceback.format_exc())
 
+    def enqueue_play(self, text: str, request_id: str = ""):
+        """外部接口：将播放请求加入队列，HTTP 不阻塞。"""
+        self._play_queue.put((text, request_id))
+
+    def _set_ai_status(self, state: str, speaker: str = "", message: str = "", **extra):
+        """通过 brain_services 设置 AI 状态"""
+        try:
+            url = cfg.get_service_url("brain_services", "/api/status/set")
+            requests.post(url, json={"state": state, "speaker": speaker, "message": message, "extra": extra}, timeout=0.2)
+        except Exception as e:
+            logger.debug("设置状态失败: %s", e)
+
     def play_sync(self, text: str, request_id: str = ""):
-        """同步播放语音：拆句 → 逐句 TTS → 边合成边播放。全程 STATE_PLAYING。"""
-        while self.get_state() != STATE_IDLE:
-            time.sleep(0.1)
+        """同步播放语音：拆句 → 逐句 TTS → 边合成边播放。全程 STATE_PLAYING。
+
+        只从 _run_loop 调用（播放队列或唤醒词流程），无需忙等。
+        """
+        self._set_ai_status("speaking", message=text[:80])
         self.set_state(STATE_PLAYING)
         logger.warning(f"play_sync 开始播放 {text}")
         import pyaudio as _pa
@@ -162,14 +177,14 @@ class VoiceProcessor:
             if not sentences:
                 return
 
-            play_queue: queue.Queue = queue.Queue()
+            inner_queue: queue.Queue = queue.Queue()
             done_event = threading.Event()
             logger.info("共 %d 句，开始流水线播放", len(sentences))
 
             # 消费者线程：逐条出队播放
             def _consumer():
                 while True:
-                    item = play_queue.get()
+                    item = inner_queue.get()
                     if item is None:
                         break
                     wav, sr, last_sentence = item
@@ -226,16 +241,17 @@ class VoiceProcessor:
                         sr = _wf.getframerate()
                     dur = len(wav_data) / sr / 2
                     logger.info("TTS 第%d句完成 耗时%.1fs 音频%.1fs (sr=%d)", idx + 1, t_tts, dur, sr)
-                    play_queue.put((wav_data, sr, last_sentence))
+                    inner_queue.put((wav_data, sr, last_sentence))
                 except Exception as e:
                     logger.error("TTS 合成失败: %s", e)
 
             # 结束信号
-            play_queue.put(None)
+            inner_queue.put(None)
             done_event.wait()
 
             if request_id:
                 _trace_event(request_id, "tts_end")
+                _trace_event(request_id, "play_end")
         except Exception as e:
             logger.error("TTS 播放失败: %s", e)
         finally:
@@ -244,6 +260,7 @@ class VoiceProcessor:
             except Exception:
                 pass
             self.set_state(STATE_IDLE)
+            self._set_ai_status("idle")
 
     def get_state(self) -> int:
         with self._lock:
@@ -380,6 +397,12 @@ class VoiceProcessor:
             check_counter = 0
 
             while self._running:
+                # 1. 优先播放队列（外部请求串行）
+                if not self._play_queue.empty():
+                    q_text, q_request_id = self._play_queue.get()
+                    self.play_sync(q_text, q_request_id)
+                    continue
+
                 # 非 IDLE 状态（播放/录音/处理中）→ 清缓存跳过
                 if self.get_state() != STATE_IDLE:
                     buffer.clear()
