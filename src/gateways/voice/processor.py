@@ -150,7 +150,6 @@ class VoiceProcessor:
 
     def play_sync(self, text: str, request_id: str = ""):
         """同步播放语音：拆句 → 逐句 TTS → 边合成边播放。全程 STATE_PLAYING。"""
-        prev_state = self.get_state()
         self.set_state(STATE_PLAYING)
         logger.warning(f"play_sync 开始播放 {text}")
         import pyaudio as _pa
@@ -242,7 +241,7 @@ class VoiceProcessor:
                 _pa_instance.terminate()
             except Exception:
                 pass
-            self.set_state(prev_state)
+            self.set_state(STATE_IDLE)
 
     def get_state(self) -> int:
         with self._lock:
