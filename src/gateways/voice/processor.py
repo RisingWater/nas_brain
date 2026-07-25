@@ -127,9 +127,9 @@ class VoiceProcessor:
                 offset = end
             
             # 等待缓冲区排空
-            stream.stop_stream()
             while stream.is_active():
                 time.sleep(0.01)
+            stream.stop_stream()
                 
         except Exception as e:
             # ✅ 捕获所有异常并输出详细堆栈
