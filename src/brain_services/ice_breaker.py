@@ -227,10 +227,17 @@ class IceBreakerEngine:
                 logger.warning("群 %s 冰点提示词为空", user_id)
                 return
 
-            # 构建上下文：用冰点提示词替换 system_prompt
+            # 保留原有 system_prompt + 叠加主动发言提示词
+            ori_prompt = (config.get("system_prompt") or "").strip()
+            if ori_prompt:
+                combined_prompt = f"{ori_prompt}\n\n{ice_prompt}"
+            else:
+                combined_prompt = ice_prompt
+
+            # 构建上下文（含三层记忆 + 近期聊天）
             messages = self.context_builder.build(
                 user_id=user_id,
-                config={**config, "system_prompt": ice_prompt},
+                config={**config, "system_prompt": combined_prompt},
                 current_msg=f"@{self._bot_name} 群里冷场了，请主动说点什么活跃气氛。",
                 protocol="wechat",
                 chat_type="group",
