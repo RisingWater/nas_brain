@@ -95,29 +95,56 @@ class VoiceProcessor:
     def _play_audio(self, pa, wav_data: bytes):
         """pyaudio 播放单句，从 WAV 头读取格式参数，分块写入（200ms/块）"""
         import pyaudio as _pa, wave as _wave, io as _io
-        with _wave.open(_io.BytesIO(wav_data), "rb") as _wf:
-            sr = _wf.getframerate()
-            channels = _wf.getnchannels()
-            sw = _wf.getsampwidth()
-        fmt_map = {1: _pa.paInt8, 2: _pa.paInt16}
-        fmt = fmt_map.get(sw, _pa.paInt16)
-        # 裸 PCM 数据
-        pcm = wav_data[44:] if len(wav_data) > 44 else wav_data
-        frame_size = sw * channels  # 一帧字节数
-        chunk_frames = int(sr * 0.2)  # 200ms 的帧数
-        chunk_bytes = chunk_frames * frame_size
+        import time
+        import traceback
+        
         stream = None
         try:
+            # 解析 WAV 头
+            with _wave.open(_io.BytesIO(wav_data), "rb") as _wf:
+                sr = _wf.getframerate()
+                channels = _wf.getnchannels()
+                sw = _wf.getsampwidth()
+            
+            fmt_map = {1: _pa.paInt8, 2: _pa.paInt16}
+            fmt = fmt_map.get(sw, _pa.paInt16)
+            
+            # 裸 PCM 数据
+            pcm = wav_data[44:] if len(wav_data) > 44 else wav_data
+            frame_size = sw * channels
+            chunk_frames = int(sr * 0.2)
+            chunk_bytes = chunk_frames * frame_size
+            
+            # 打开流
             stream = pa.open(format=fmt, channels=channels, rate=sr, output=True)
+            
+            # 分块写入
             offset = 0
-            while offset < len(pcm):
-                end = min(offset + chunk_bytes, len(pcm))
+            data_len = len(pcm)
+            while offset < data_len:
+                end = min(offset + chunk_bytes, data_len)
                 stream.write(pcm[offset:end])
                 offset = end
+            
+            # 等待缓冲区排空
+            stream.stop_stream()
+            while stream.is_active():
+                time.sleep(0.01)
+                
+        except Exception as e:
+            # ✅ 捕获所有异常并输出详细堆栈
+            print(f"[ERROR] _play_audio 异常: {e}")
+            print(traceback.format_exc())
+            # 不重新抛出，让 finally 执行清理
+            
         finally:
             if stream:
-                stream.stop_stream()
-                stream.close()
+                try:
+                    stream.close()
+                except Exception as e:
+                    # ✅ 捕获关闭流时的异常
+                    print(f"[ERROR] 关闭 stream 异常: {e}")
+                    print(traceback.format_exc())
 
     def play_sync(self, text: str, request_id: str = ""):
         """同步播放语音：拆句 → 逐句 TTS → 边合成边播放。全程 STATE_PLAYING。"""
