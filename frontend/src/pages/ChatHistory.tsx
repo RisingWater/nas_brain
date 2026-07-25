@@ -213,6 +213,25 @@ export default function ChatHistory() {
         </Col>
       </Row>
 
+      {/* Web 聊天输入框 — 固定在顶部 */}
+      {selectedUser && (
+        <div style={{ borderBottom: '1px solid #e8e8e8', padding: '0 0 8px 0', display: 'flex', gap: 8 }}>
+          <Input.TextArea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+            rows={2}
+            style={{ flex: 1 }}
+            disabled={sending}
+          />
+          <Button type="primary" icon={<SendOutlined />} onClick={handleSend} loading={sending}
+                  style={{ alignSelf: 'flex-end' }}>
+            发送
+          </Button>
+        </div>
+      )}
+
       {/* 消息列表 — 最新在前 */}
       <div ref={containerRef} style={{ flex: 1, overflow: 'auto', padding: '0 4px' }}>
         {searching && (
@@ -244,24 +263,6 @@ export default function ChatHistory() {
         )}
       </div>
 
-      {/* Web 聊天输入框 — 固定在底部 */}
-      {selectedUser && (
-        <div style={{ borderTop: '1px solid #e8e8e8', padding: '8px 0', display: 'flex', gap: 8 }}>
-          <Input.TextArea
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-            rows={2}
-            style={{ flex: 1 }}
-            disabled={sending}
-          />
-          <Button type="primary" icon={<SendOutlined />} onClick={handleSend} loading={sending}
-                  style={{ alignSelf: 'flex-end' }}>
-            发送
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
