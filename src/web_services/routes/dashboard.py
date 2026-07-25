@@ -80,76 +80,71 @@ def _get_service_memory() -> dict[str, int]:
 
 
 def _get_service_cpu(interval_sec: float = 0.3) -> tuple[dict[str, float], float]:
-    """获取各服务 CPU 使用率（top 方式读 /proc/[pid]/stat）
+    """获取各服务 CPU 使用率（psutil.Process.cpu_percent）
 
     Returns:
         (per_service: dict[str, float], total_pct: float)
-        返回 CPU 核心数占用百分比（200% = 用了2核）
+        返回百分比（多核累加，200% = 用了2核）
     """
+    import psutil as _psutil
+
     port_to_name = {v: k for k, v in _SERVICE_PORTS.items()}
 
-    def _sample() -> dict[int, int]:
-        """读一次所有服务进程的 CPU ticks，按端口汇总"""
-        ticks_by_port: dict[int, int] = {}
-        try:
-            pids = [p for p in os.listdir("/proc") if p.isdigit()]
-        except OSError:
-            return ticks_by_port
-
-        for pid in pids:
+    def _identify_pids() -> dict[int, int]:
+        """遍历进程，按 cmdline 中的端口号识别服务，返回 {pid: port}"""
+        result: dict[int, int] = {}
+        for proc in _psutil.process_iter(["pid", "cmdline"]):
             try:
-                cmdline = open(f"/proc/{pid}/cmdline", "rb").read().decode("utf-8", errors="replace")
-            except OSError:
+                cmdline = proc.info.get("cmdline") or []
+                for token in cmdline:
+                    t = token.strip()
+                    if t.isdigit() and 9000 <= int(t) <= 9999:
+                        port = int(t)
+                        if port in _SERVICE_PORTS.values():
+                            result[proc.info["pid"]] = port
+                            break
+            except (_psutil.NoSuchProcess, _psutil.AccessDenied):
                 continue
-            port = None
-            for token in cmdline.split("\0"):
-                t = token.strip()
-                if t.isdigit() and 9000 <= int(t) <= 9999:
-                    port = int(t)
-                    break
-            if port is None or port not in _SERVICE_PORTS.values():
-                continue
-
-            try:
-                stat_data = open(f"/proc/{pid}/stat", "r").read()
-            except OSError:
-                continue
-            # utime/stime 在最后一个 ')' 之后，按空格分割
-            try:
-                rp = stat_data.rfind(")")
-                if rp == -1:
-                    continue
-                parts = stat_data[rp + 2:].split()
-                utime = int(parts[10])  # field 12 (1-indexed)
-                stime = int(parts[11])  # field 13 (1-indexed)
-                ticks_by_port[port] = ticks_by_port.get(port, 0) + utime + stime
-            except (IndexError, ValueError):
-                continue
-
-        return ticks_by_port
+        return result
 
     try:
-        s1 = _sample()
+        pids = _identify_pids()
+        if not pids:
+            return {}, 0.0
+
+        # 首次 cpu_percent(interval=0) 返回 0，作为基准
+        procs = {}
+        for pid, port in pids.items():
+            try:
+                p = _psutil.Process(pid)
+                p.cpu_percent(interval=None)  # 初始化
+                procs[pid] = (p, port)
+            except (_psutil.NoSuchProcess, _psutil.AccessDenied):
+                continue
+
         import time as _time
         _time.sleep(interval_sec)
-        s2 = _sample()
+
+        # 第二次取值
+        per_service: dict[str, float] = {}
+        total_pct = 0.0
+        for pid, (p, port) in procs.items():
+            try:
+                pct = p.cpu_percent(interval=None)  # 自上次调用的变化
+            except (_psutil.NoSuchProcess, _psutil.AccessDenied):
+                continue
+            if pct > 0:
+                svc_name = port_to_name.get(port, f"port_{port}")
+                per_service[svc_name] = per_service.get(svc_name, 0) + pct
+                total_pct += pct
+
+        total_pct = round(total_pct, 1)
+        per_service = {k: round(v, 1) for k, v in per_service.items()}
+        return per_service, total_pct
+
     except Exception as e:
-        logger.warning("CPU 采样失败: %s", e)
+        logger.warning("CPU 统计失败: %s", e)
         return {}, 0.0
-
-    clk_tck = os.sysconf(os.sysconf_names["SC_CLK_TCK"])  # 通常 100
-    total_ticks = sum(s2.values()) - sum(s1.values())
-    total_pct = round(total_ticks / (interval_sec * clk_tck) * 100, 1)
-
-    per_service = {}
-    for port, t2 in s2.items():
-        t1 = s1.get(port, 0)
-        delta = t2 - t1
-        if delta > 0:
-            pct = round(delta / (interval_sec * clk_tck) * 100, 1)
-            per_service[port_to_name.get(port, f"port_{port}")] = pct
-
-    return per_service, total_pct
 
 
 @router.get("/dashboard/stats")
