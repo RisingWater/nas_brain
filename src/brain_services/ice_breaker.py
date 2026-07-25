@@ -248,10 +248,13 @@ class IceBreakerEngine:
 
             chat_type = "group" if user_type == "group" else "private"
 
-            # 构建上下文（不改 system_prompt，保持人设一致）
+            # 短期窗口设大（8h），确保冷场后还能加载到最近聊天记录
+            ctx_config = {**config, "short_term_window": 480}
+
+            # 构建上下文（含三层记忆 + 近期聊天）
             messages = self.context_builder.build(
                 user_id=user_id,
-                config=config,
+                config=ctx_config,
                 current_msg=current_msg,
                 protocol="wechat",
                 chat_type=chat_type,
