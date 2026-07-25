@@ -90,10 +90,6 @@ export default function ChatHistory() {
       const res = await getChatHistory(selectedUser, { limit: PAGE_SIZE });
       setMessages(res.messages);
       setHasMore(res.messages.length >= PAGE_SIZE);
-      // 滚动到底部
-      setTimeout(() => {
-        if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
-      }, 100);
     } catch {
       message.error('发送失败');
     } finally {
@@ -122,7 +118,11 @@ export default function ChatHistory() {
   const formatTime = (t: string) => {
     const d = new Date(t + 'Z');
     const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    const now = new Date();
+    const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    if (isToday) return time;
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${time}`;
   };
 
   const renderMessage = (msg: ChatMessage) => {
@@ -213,7 +213,7 @@ export default function ChatHistory() {
         </Col>
       </Row>
 
-      {/* 消息列表 */}
+      {/* 消息列表 — 最新在前 */}
       <div ref={containerRef} style={{ flex: 1, overflow: 'auto', padding: '0 4px' }}>
         {searching && (
           <div style={{ textAlign: 'center', marginBottom: 8 }}>
@@ -232,7 +232,6 @@ export default function ChatHistory() {
           <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>暂无聊天记录</div>
         ) : (
           <>
-            {messages.map(renderMessage)}
             {hasMore && (
               <div style={{ textAlign: 'center', padding: 12 }}>
                 <Button onClick={handleLoadMore} loading={loadingMore} icon={<ArrowDownOutlined />}>
@@ -240,28 +239,29 @@ export default function ChatHistory() {
                 </Button>
               </div>
             )}
+            {[...messages].reverse().map(renderMessage)}
           </>
         )}
-
-        {/* Web 聊天输入框 */}
-        {selectedUser && (
-          <div style={{ borderTop: '1px solid #e8e8e8', padding: '8px 0', display: 'flex', gap: 8 }}>
-            <Input.TextArea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-              rows={2}
-              style={{ flex: 1 }}
-              disabled={sending}
-            />
-            <Button type="primary" icon={<SendOutlined />} onClick={handleSend} loading={sending}
-                    style={{ alignSelf: 'flex-end' }}>
-              发送
-            </Button>
-          </div>
-        )}
       </div>
+
+      {/* Web 聊天输入框 — 固定在底部 */}
+      {selectedUser && (
+        <div style={{ borderTop: '1px solid #e8e8e8', padding: '8px 0', display: 'flex', gap: 8 }}>
+          <Input.TextArea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+            rows={2}
+            style={{ flex: 1 }}
+            disabled={sending}
+          />
+          <Button type="primary" icon={<SendOutlined />} onClick={handleSend} loading={sending}
+                  style={{ alignSelf: 'flex-end' }}>
+            发送
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
