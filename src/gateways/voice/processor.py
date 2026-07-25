@@ -400,13 +400,8 @@ class VoiceProcessor:
                 # 1. 优先播放队列（外部请求串行）
                 if not self._play_queue.empty():
                     q_text, q_request_id = self._play_queue.get()
+                    buffer.clear()  # 清缓存，避免旧音频导致唤醒误检
                     self.play_sync(q_text, q_request_id)
-                    continue
-
-                # 非 IDLE 状态（播放/录音/处理中）→ 清缓存跳过
-                if self.get_state() != STATE_IDLE:
-                    buffer.clear()
-                    time.sleep(frame_samples / 16000)  # 等一帧的时间
                     continue
 
                 # 每积累 80000 采样数检查一次帧大小变化（约 5 秒）
