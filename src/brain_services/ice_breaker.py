@@ -11,7 +11,7 @@ import threading
 import requests
 from datetime import datetime
 from src.common.utils import cfg
-from .strategy.context_builder import LLMContextBuilder, _DEFAULT_SYSTEM_PROMPT
+from .strategy.context_builder import LLMContextBuilder
 from .strategy.llm_handler import LLMHandler
 
 logger = logging.getLogger("brain_services.ice_breaker")
@@ -209,7 +209,6 @@ class IceBreakerEngine:
         """公开接口：立即生成并发送主动发言（测试用）"""
         config = {"ice_breaker_prompt": prompt_override} if prompt_override else {}
         if not config.get("ice_breaker_prompt"):
-            # 从 db_services 拉取实时配置
             try:
                 url = cfg.get_service_url("db_services", f"/api/user-configs/{user_id}")
                 resp = requests.get(url, timeout=10)
@@ -217,28 +216,45 @@ class IceBreakerEngine:
                     config = resp.json()
             except Exception:
                 pass
+        # 查 user_type
+        if not config.get("user_type"):
+            try:
+                url = cfg.get_service_url("db_services", f"/api/users/{user_id}")
+                resp = requests.get(url, timeout=5)
+                if resp.status_code == 200:
+                    config["user_type"] = resp.json().get("user_type") or "person"
+            except Exception:
+                pass
         self._generate_and_send(user_id, wechat_name, config, {})
 
     def _generate_and_send(self, user_id: str, wechat_name: str, config: dict, latest_msg: dict):
-        """用 LLM 生成冰点消息并发送"""
+        """用 LLM 生成主动发言消息并发送"""
         try:
-            ice_prompt = config.get("ice_breaker_prompt", "").strip()
-            ori_prompt = (config.get("system_prompt") or "").strip()
-            if not ori_prompt:
-                ori_prompt = _DEFAULT_SYSTEM_PROMPT
+            user_type = config.get("user_type", "person")
 
-            if ice_prompt:
-                combined_prompt = f"{ori_prompt}\n\n{ice_prompt}"
+            # 确定触发语：ice_breaker_prompt 用户可自定义，空则用默认
+            trigger = config.get("ice_breaker_prompt", "").strip()
+            if not trigger:
+                if user_type == "group":
+                    trigger = "群里冷场了，请主动说点什么活跃气氛。"
+                else:
+                    trigger = "好久没聊天了，说点什么吧。"
+
+            # 群聊需要 @bot_name 绕过 group_at_only 检查
+            if user_type == "group" and self._bot_name:
+                current_msg = f"@{self._bot_name} {trigger}"
             else:
-                combined_prompt = ori_prompt
+                current_msg = trigger
 
-            # 构建上下文（含三层记忆 + 近期聊天）
+            chat_type = "group" if user_type == "group" else "private"
+
+            # 构建上下文（不改 system_prompt，保持人设一致）
             messages = self.context_builder.build(
                 user_id=user_id,
-                config={**config, "system_prompt": combined_prompt},
-                current_msg=f"@{self._bot_name} 群里冷场了，请主动说点什么活跃气氛。",
+                config=config,
+                current_msg=current_msg,
                 protocol="wechat",
-                chat_type="group",
+                chat_type=chat_type,
             )
 
             # LLM 生成（不调用工具）
@@ -252,10 +268,10 @@ class IceBreakerEngine:
             if reply and reply.strip():
                 _send_wechat(wechat_name, reply.strip())
             else:
-                logger.warning("冰点回复为空，群 %s", user_id)
+                logger.warning("主动发言回复为空，%s", user_id)
 
         except Exception as e:
-            logger.error("冰点生成/发送失败 %s: %s", user_id, e, exc_info=True)
+            logger.error("主动发言生成/发送失败 %s: %s", user_id, e, exc_info=True)
 
 
 # 全局单例

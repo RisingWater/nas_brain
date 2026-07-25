@@ -103,7 +103,7 @@ def get_ice_breaker_candidates():
     """返回所有启用了主动发言且配置了微信名的用户（供 brain_services 后台循环使用）"""
     conn = db.get_connection()
     rows = conn.execute(
-        """SELECT uc.*, u.wechat_name FROM user_configs uc
+        """SELECT uc.*, u.wechat_name, u.user_type FROM user_configs uc
            JOIN users u ON uc.user_id = u.user_id
            WHERE u.wechat_name IS NOT NULL AND u.wechat_name != ''
              AND uc.ice_breaker_enabled = 1
@@ -113,6 +113,7 @@ def get_ice_breaker_candidates():
     for r in rows:
         d = _row_to_dict(r)
         d["wechat_name"] = r["wechat_name"] or ""
+        d["user_type"] = r["user_type"] or ""
         items.append(d)
     return {"items": items}
 

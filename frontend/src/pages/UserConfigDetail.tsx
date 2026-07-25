@@ -224,8 +224,8 @@ export default function UserConfigDetail() {
           if (!getFieldValue('ice_breaker_enabled')) return null;
           return (
             <>
-              <Form.Item name="ice_breaker_prompt" label="主动发言提示词"
-                         tooltip="发送给 LLM 的独立提示词，用于生成主动发言内容">
+              <Form.Item name="ice_breaker_prompt" label="主动发言触发语"
+                         tooltip="作为用户消息发给 LLM，触发它主动说话。空则用默认（群聊/个人不同）">
                 <Input.TextArea rows={3} placeholder="请输入提示词..." />
               </Form.Item>
               <Form.Item name="ice_breaker_trigger_minutes" label="沉默触发时间（分钟）"
