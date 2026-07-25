@@ -304,6 +304,48 @@ cfg.get_service_url("voice_gateway", "/api/voice/speak")
 - `frontend/src/pages/AIStatusPage.tsx` — 独立全屏页面，`?debug=1` 显示测试按钮
 - 路由 `/ai-status`（独立于管理后台布局）
 
+## 请求追踪
+
+`src/common/utils/tracer.py` — 全链路耗时追踪，数据存 `db_services` 的 `request_traces` 表。
+
+### 打点 API
+
+| 函数 | 用途 | 调用方 |
+|------|------|--------|
+| `trace_event(request_id, stage, ...)` | 记录一个事件（带毫秒时间戳） | 各微服务 |
+| `trace_content(request_id, content)` | 更新请求内容（用户说的话） | voice_gateway |
+| `trace_reply(request_id, reply)` | 更新回复内容 | brain_services |
+
+### 阶段定义
+
+当前追踪的 stage 时间线：
+
+```
+wakeword → record_end → voiceprint_end → stt_end →
+brain_receive → brain_done → tts_end → play_end
+```
+
+每个 stage 有独立毫秒时间戳，前端据此计算各阶段耗时。
+
+### 前端 TracePage
+
+`frontend/src/pages/TracePage.tsx` — 路由 `/traces`（管理后台「智能引擎 → 请求追踪」）。
+
+两个视图：
+- **列表** — 请求 ID、协议、用户、内容、阶段耗时摘要、SKIP 标记；支持翻页和筛选（协议、用户）
+- **详情** — 点「详情」进入，显示请求元信息、各阶段耗时条（Progress 组件）、事件时间线表格
+
+### 服务端
+
+`src/db_services/routes/traces.py` — RESTful API：
+- `POST /api/request-traces/event` — 记录事件
+- `PUT /api/request-traces/{id}/content` — 更新内容
+- `PUT /api/request-traces/{id}/reply` — 更新回复
+- `GET /api/request-traces?limit=&offset=&protocol=&user_id=` — 列表查询
+- `GET /api/request-traces/{id}` — 获取单条详情
+- `DELETE /api/request-traces/{id}` — 删除
+- `GET /api/request-traces/stats` — 统计数据
+
 ## 关键端口
 
 | 服务 | 端口 | 状态 |
