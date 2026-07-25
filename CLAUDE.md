@@ -136,6 +136,7 @@ if __name__ == "__main__":
 | write_pdf_file | 写 PDF 文件 | | ✅ |
 | read_text_file | 读文本文件 | ✅ | |
 | read_pdf_file | 读 PDF 文件 | ✅ | |
+| rss_news | RSS 新闻资讯查询（今日时政要闻/股市财经） | | |
 | search_chat_history | 搜索聊天记录 | ✅ | |
 | run_python | 执行 Python 代码 | | ✅ |
 
@@ -163,27 +164,85 @@ def handle(self, req, ctx) -> dict | None:
     # 也支持 {"reply": "...", "files": ["..."]}
 ```
 
+### 工具路由优先级
+
+LLM 根据 description 自主选择工具。关键路由策略：
+
+| 场景 | 优先工具 | 说明 |
+|------|---------|------|
+| 今日新闻、时政要闻、股市财经 | `rss_news` | 响应快、成本低，已有订阅数据 |
+| 实时查询、补充背景、验证数据 | `web_search` | 仅当 rss_news 不够用时调用 |
+| 常识/历史/科学/编程等知识 | 不调用 | LLM 自身知识即可 |
+
 ## 工具返回值中的 silent 属性
 
 - `silent=True`：LLM 调用工具时的前缀文本（如"好嘞，我来查一下"）不播放/不展示
 - `final=True`：工具结果不送回 LLM 继续处理，直接作为最终回复
+
+## Detector 插件系统
+
+`src/schedule_services/detector/` — 定时检测插件，主循环每 tick 调用 `process_loop()`。
+
+### 配置机制
+
+每个 detector 声明一个 Pydantic `ConfigModel`，自动生成 JSON Schema → 前端 SchemaForm 动态渲染：
+
+```python
+class MyConfig(BaseModel):
+    interval: int = Field(600, title="运行间隔（秒）", ge=60)
+    chatnames: list[str] = Field(
+        ["默认群"], title="通知群聊",
+        json_schema_extra={"x_source": "wechat_names"},
+    )
+
+class MyDetector(BaseDetector):
+    name = "my_detector"
+    interval = 600
+    ConfigModel = MyConfig
+```
+
+- 配置存 `data/detector/{name}.json`，`load_config()` 在启动时读取
+- `interval` 字段被调度器读取，可动态调整运行频率
+- `x_source: "wechat_names"` 让前端 Select 选项自动填充用户微信名
+
+### 配置页面
+
+`/detectors` → 列表 → 点「配置」→ 跳转到独立详情页 `/detectors/{name}/config`，显示表单（数组项用 Collapse 折叠面板）。
+保存后自动重载配置到实例变量。
+
+### 现有 Detector
+
+| 名称 | 说明 | 可配项 |
+|------|------|--------|
+| `battery` | 电池电量检测 | 检查时间、低电量阈值、通知群聊 |
+| `exam` | 考试日程检查 | 运行间隔、通知群聊 |
+| `dsm` | DSM 无差别提醒 | 多条规则（微信/语音通知） |
+| `rss_news` | RSS 资讯获取 | 订阅源列表、拉取时间、保存目录 |
+
+### 用户策略配置页面
+
+`/users` → 点「配置」→ 跳转到 `/users/{userId}/config`，独立页面编辑策略（smart/direct/ignore）、
+System Prompt、工具白名单、处理器白名单、记忆窗口等。
 
 ## 语音网关（voice_gateway）
 
 `src/gateways/voice/` 微服务，端口 9050，单线程主循环驱动：
 
 ```
-主循环:
-  ├─ 1. 播放队列（外部请求串行播放）
-  ├─ 2. 唤醒词检测
-  │     → "我在呢" → VAD → STT → 声纹 → brain POST
-  └─ 3. 状态跳过（非 IDLE）
+主循环（顺序执行，无状态跳过）:
+  ├─ 1. 播放队列非空 → play_sync（阻塞到播完）
+  └─ 2. 唤醒词检测
+         → "我在呢" → VAD → STT → 声纹 → brain POST
+         → 回到 1
 ```
 
-**状态互斥：**
-- RECORDING/PROCESSING/PLAYING 时 → 主循环跳过唤醒词检测
-- 外部播放请求（brain 回复、定时器通知）→ 入 `_play_queue`，主循环在适当时候取出串行播放
-- `/api/voice/speak` 不阻塞 HTTP，立即返回
+**外部播放请求**（brain 回复、定时器通知）→ 入 `_play_queue`，主循环在回到顶部时取出串行播放。`/api/voice/speak` 不阻塞 HTTP，立即返回。
+
+**状态常量**（仅用于外部监控，主循环不依赖状态判断）：
+- `STATE_IDLE = 0` — 空闲
+- `STATE_RECORDING = 1` — VAD 录音中
+- `STATE_PLAYING = 2` — TTS 播放中
+- `STATE_PROCESSING = 3` — STT/声纹处理中
 
 **组件：**
 | 文件 | 功能 | 依赖 |

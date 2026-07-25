@@ -58,6 +58,7 @@
 | get/set_volume | 音量控制 | send_voice | TTS 播放 |
 | list_exams / get_scores | 查考试成绩 | run_python | 执行 Python |
 | write/read_text_file / pdf | 文件读写 | search_chat_history | 聊天记录搜索 |
+| rss_news | RSS 新闻资讯查询 | | |
 
 ### 处理器（热加载）
 
@@ -76,7 +77,8 @@
 
 ### 其他
 
-- 定时任务（检测器）— 考试提醒等
+- **检测器（Detector）** — 可配置的定时检测插件：电池电量、考试日程、DSM 通知、RSS 新闻资讯等，支持 Web 界面动态配置
+- **用户策略单独页面** — 每个用户的 smart/direct/ignore 策略、工具白名单、System Prompt 在独立页面编辑
 - TTS 缓存 — 重复文本跳过合成
 - 服务管理器 — Web 上启停各微服务
 - 微信聊天记录搜索
@@ -267,22 +269,22 @@ registry.register(MyProcessor())
 ## 语音流程
 
 ```text
-主循环单线程驱动：
+主循环（单线程顺序执行，无状态跳过）：
 
 唤醒词触发 → 播"我在呢"
   → VAD 录音（检测静音自动停止）
   → 声纹识别（匹配用户 / 归入未分配）
   → STT（SenseVoiceSmall）
   → brain_services（LLM + 工具，异步）
-  → 回到主循环
+  → 回到顶部
 
 外部播放请求（brain 回复、定时器通知）：
   → 入播放队列
-  → 主循环在空闲时取出串行播放
+  → 主循环回到顶部时取出串行播放
 ```
 
-状态互斥规则：主循环只在 IDLE 时检测唤醒词；非 IDLE（录音/处理/播放）时跳过。
-外部调用 `/api/voice/speak` 不阻塞 HTTP，加入队列后立即返回，播放由主循环统一调度。
+主循环一次迭代只做一件事：播队列或检测唤醒词。没有状态跳过，没有忙等。
+外部调用 `/api/voice/speak` 加入队列后立即返回，不阻塞 HTTP。
 
 ## 三层记忆
 
