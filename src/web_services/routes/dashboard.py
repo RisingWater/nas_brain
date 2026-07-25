@@ -79,6 +79,79 @@ def _get_service_memory() -> dict[str, int]:
     return result
 
 
+def _get_service_cpu(interval_sec: float = 0.3) -> tuple[dict[str, float], float]:
+    """获取各服务 CPU 使用率（top 方式读 /proc/[pid]/stat）
+
+    Returns:
+        (per_service: dict[str, float], total_pct: float)
+        返回 CPU 核心数占用百分比（200% = 用了2核）
+    """
+    port_to_name = {v: k for k, v in _SERVICE_PORTS.items()}
+
+    def _sample() -> dict[int, int]:
+        """读一次所有服务进程的 CPU ticks，按端口汇总"""
+        ticks_by_port: dict[int, int] = {}
+        try:
+            pids = [p for p in os.listdir("/proc") if p.isdigit()]
+        except OSError:
+            return ticks_by_port
+
+        for pid in pids:
+            try:
+                cmdline = open(f"/proc/{pid}/cmdline", "rb").read().decode("utf-8", errors="replace")
+            except OSError:
+                continue
+            port = None
+            for token in cmdline.split("\0"):
+                t = token.strip()
+                if t.isdigit() and 9000 <= int(t) <= 9999:
+                    port = int(t)
+                    break
+            if port is None or port not in _SERVICE_PORTS.values():
+                continue
+
+            try:
+                stat_data = open(f"/proc/{pid}/stat", "r").read()
+            except OSError:
+                continue
+            # utime/stime 在最后一个 ')' 之后，按空格分割
+            try:
+                rp = stat_data.rfind(")")
+                if rp == -1:
+                    continue
+                parts = stat_data[rp + 2:].split()
+                utime = int(parts[10])  # field 12 (1-indexed)
+                stime = int(parts[11])  # field 13 (1-indexed)
+                ticks_by_port[port] = ticks_by_port.get(port, 0) + utime + stime
+            except (IndexError, ValueError):
+                continue
+
+        return ticks_by_port
+
+    try:
+        s1 = _sample()
+        import time as _time
+        _time.sleep(interval_sec)
+        s2 = _sample()
+    except Exception as e:
+        logger.warning("CPU 采样失败: %s", e)
+        return {}, 0.0
+
+    clk_tck = os.sysconf(os.sysconf_names["SC_CLK_TCK"])  # 通常 100
+    total_ticks = sum(s2.values()) - sum(s1.values())
+    total_pct = round(total_ticks / (interval_sec * clk_tck) * 100, 1)
+
+    per_service = {}
+    for port, t2 in s2.items():
+        t1 = s1.get(port, 0)
+        delta = t2 - t1
+        if delta > 0:
+            pct = round(delta / (interval_sec * clk_tck) * 100, 1)
+            per_service[port_to_name.get(port, f"port_{port}")] = pct
+
+    return per_service, total_pct
+
+
 @router.get("/dashboard/stats")
 async def get_dashboard_stats():
     """汇总监控面板数据"""
@@ -97,8 +170,8 @@ async def get_dashboard_stats():
     log_dir = os.getenv("LOG_DIR", os.path.join(_PROJECT_ROOT, "data", "logs"))
     log_size = _get_dir_size(log_dir) if os.path.isdir(log_dir) else 0
 
-    # CPU 使用率（从 cgroup 读容器内进程，不含宿主机）
-    cpu = {"load_1m": 0, "load_5m": 0, "load_15m": 0, "cores": 1, "pct": 0}
+    # CPU 使用率（top 方式读 /proc/[pid]/stat，区分各服务）
+    cpu = {"load_1m": 0, "load_5m": 0, "load_15m": 0, "cores": 1, "pct": 0, "services": {}}
     try:
         cpu["cores"] = os.cpu_count() or 1
         try:
@@ -109,33 +182,9 @@ async def get_dashboard_stats():
         except (AttributeError, OSError):
             pass
 
-        cpu_stat = "/sys/fs/cgroup/cpu.stat"
-        cpu_max = "/sys/fs/cgroup/cpu.max"
-        if os.path.exists(cpu_stat):
-            def _read_cgroup_usage() -> int:
-                with open(cpu_stat) as f:
-                    for line in f:
-                        if line.startswith("usage_usec"):
-                            return int(line.strip().split()[1])
-                return 0
-
-            u1 = _read_cgroup_usage()
-            import time as _time
-            _time.sleep(0.3)
-            u2 = _read_cgroup_usage()
-            delta_us = u2 - u1
-            cores_used = delta_us / 300_000  # 0.3s = 300000us
-
-            quota = 0
-            if os.path.exists(cpu_max):
-                with open(cpu_max) as f:
-                    parts = f.read().strip().split()
-                    if parts and parts[0] != "max":
-                        quota = int(parts[0])
-            if quota > 0:
-                cpu["pct"] = min(100.0, round(cores_used * 100, 1))
-            else:
-                cpu["pct"] = round(cores_used * 100, 1)
+        svc_cpu, total_pct = _get_service_cpu(interval_sec=0.3)
+        cpu["pct"] = total_pct
+        cpu["services"] = svc_cpu
     except Exception as e:
         logger.warning("CPU 统计失败: %s", e)
 
