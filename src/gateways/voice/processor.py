@@ -116,7 +116,7 @@ class VoiceProcessor:
             chunk_bytes = chunk_frames * frame_size
             
             # 打开流
-            stream = pa.open(format=fmt, channels=channels, rate=sr, output=True)
+            stream = pa.open(format=fmt, channels=channels, rate=sr, output=True, frames_per_buffer=chunk_frames)
             
             # 分块写入
             offset = 0
@@ -141,6 +141,7 @@ class VoiceProcessor:
             if stream:
                 try:
                     stream.close()
+                    time.sleep(0.2)
                 except Exception as e:
                     # ✅ 捕获关闭流时的异常
                     print(f"[ERROR] 关闭 stream 异常: {e}")
