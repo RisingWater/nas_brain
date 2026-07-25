@@ -97,17 +97,46 @@ async def get_dashboard_stats():
     log_dir = os.getenv("LOG_DIR", os.path.join(_PROJECT_ROOT, "data", "logs"))
     log_size = _get_dir_size(log_dir) if os.path.isdir(log_dir) else 0
 
-    # CPU 使用率（psutil）
+    # CPU 使用率（从 cgroup 读容器内进程，不含宿主机）
     cpu = {"load_1m": 0, "load_5m": 0, "load_15m": 0, "cores": 1, "pct": 0}
     try:
-        import psutil
-        cpu["pct"] = psutil.cpu_percent(interval=0.3)
-        cpu["cores"] = psutil.cpu_count() or 1
-        loads = os.getloadavg()
-        cpu["load_1m"] = loads[0]
-        cpu["load_5m"] = loads[1]
-        cpu["load_15m"] = loads[2]
-    except (ImportError, AttributeError, Exception) as e:
+        cpu["cores"] = os.cpu_count() or 1
+        try:
+            loads = os.getloadavg()
+            cpu["load_1m"] = loads[0]
+            cpu["load_5m"] = loads[1]
+            cpu["load_15m"] = loads[2]
+        except (AttributeError, OSError):
+            pass
+
+        cpu_stat = "/sys/fs/cgroup/cpu.stat"
+        cpu_max = "/sys/fs/cgroup/cpu.max"
+        if os.path.exists(cpu_stat):
+            def _read_cgroup_usage() -> int:
+                with open(cpu_stat) as f:
+                    for line in f:
+                        if line.startswith("usage_usec"):
+                            return int(line.strip().split()[1])
+                return 0
+
+            u1 = _read_cgroup_usage()
+            import time as _time
+            _time.sleep(0.3)
+            u2 = _read_cgroup_usage()
+            delta_us = u2 - u1
+            cores_used = delta_us / 300_000  # 0.3s = 300000us
+
+            quota = 0
+            if os.path.exists(cpu_max):
+                with open(cpu_max) as f:
+                    parts = f.read().strip().split()
+                    if parts and parts[0] != "max":
+                        quota = int(parts[0])
+            if quota > 0:
+                cpu["pct"] = min(100.0, round(cores_used * 100, 1))
+            else:
+                cpu["pct"] = round(cores_used * 100, 1)
+    except Exception as e:
         logger.warning("CPU 统计失败: %s", e)
 
     # 总内存
