@@ -140,6 +140,13 @@ def _get_service_cpu(interval_sec: float = 0.3) -> tuple[dict[str, float], float
 
         total_pct = round(total_pct, 1)
         per_service = {k: round(v, 1) for k, v in per_service.items()}
+
+        # 除以核心数，归一化为系统总 CPU 占比（0~100%）
+        cores = os.cpu_count() or 1
+        if cores > 1:
+            total_pct = round(total_pct / cores, 1)
+            per_service = {k: round(v / cores, 1) for k, v in per_service.items()}
+
         return per_service, total_pct
 
     except Exception as e:

@@ -91,16 +91,18 @@ export default function Dashboard() {
     { name: '剩余', value: memRemaining },
   ];
 
-  // CPU 各服务占比
+  // CPU（已归一化到 0~100%）
   const cpuServices = s.system.cpu.services || {};
-  const cpuTotal = Object.values(cpuServices).reduce((a, b) => a + b, 0);
   const cpuPct = s.system.cpu.pct || 0;
   const cpuData = [
-    ...Object.entries(cpuServices).filter(([, v]) => v > 0).map(([k, v]) => ({ name: serviceLabels[k] || k, value: v })),
+    { name: '使用', value: Math.min(100, cpuPct) },
+    { name: '空闲', value: Math.max(0, 100 - cpuPct) },
   ];
-  const cpuDetail = Object.entries(cpuServices)
-    .filter(([, v]) => v > 0)
-    .map(([k, v], i) => ({ label: serviceLabels[k] || k, pct: v, color: MEM_PIE_COLORS[i % MEM_PIE_COLORS.length] }));
+  const cpuDetail = Object.keys(serviceLabels).map((k, i) => ({
+    label: serviceLabels[k],
+    pct: cpuServices[k] || 0,
+    color: MEM_PIE_COLORS[i % MEM_PIE_COLORS.length],
+  }));
 
   const storageDetail = [
     { label: '数据库', size: s.storage.db_size, color: STORAGE_PIE_COLORS[0] },
