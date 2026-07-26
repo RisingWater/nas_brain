@@ -36,11 +36,18 @@ def _row_to_dict(row) -> dict:
 
 @router.post("", status_code=201)
 def add_summary(req: ChatSummaryCreate):
-    """写入一条中期记忆总结"""
+    """写入一条中期记忆总结，只保留该用户最新 5 条"""
     conn = db.get_connection()
     cursor = conn.execute(
         "INSERT INTO chat_summaries (user_id, summary, last_msg_id) VALUES (?, ?, ?)",
         (req.user_id, req.summary, req.last_msg_id),
+    )
+    # 清理旧总结，只保留最新 5 条
+    conn.execute(
+        """DELETE FROM chat_summaries WHERE user_id = ? AND id NOT IN (
+            SELECT id FROM chat_summaries WHERE user_id = ? ORDER BY id DESC LIMIT 5
+        )""",
+        (req.user_id, req.user_id),
     )
     conn.commit()
     return {"success": True, "id": cursor.lastrowid}
