@@ -133,7 +133,7 @@ class VoiceProcessor:
             # 直接 sleep 剩余播放时间，避免 stream.is_active() 死等
             remaining = max(0, audio_duration - (time.time() - write_start))
             if remaining > 0:
-                time.sleep(remaining)
+                time.sleep(remaining + 0.05)
             stream.stop_stream()
                 
         except Exception as e:
