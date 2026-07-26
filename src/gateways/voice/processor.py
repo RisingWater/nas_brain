@@ -128,9 +128,8 @@ class VoiceProcessor:
                 stream.write(pcm[offset:end])
                 offset = end
             
-            # 等待缓冲区排空（最多等 5 秒）
-            wait_start = time.time()
-            while stream.is_active() and time.time() - wait_start < 5:
+            # 等待缓冲区排空
+            while stream.is_active():
                 time.sleep(0.01)
             stream.stop_stream()
                 
