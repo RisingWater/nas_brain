@@ -496,6 +496,7 @@ class VoiceProcessor:
 
                 # ==================== PLAYING ====================
                 elif self._state == STATE_PLAYING:
+                    logger.info("进入STATE_PLAYING")
                     text, request_id = self._play_queue.get()
                     self._close_wakeword_stream()
                     self.play_sync(text, request_id)
@@ -504,6 +505,7 @@ class VoiceProcessor:
 
                 # ==================== RECORDING ====================
                 elif self._state == STATE_RECORDING:
+                    logger.info("进入STATE_RECORDING")
                     try:
                         silence_ms = self._get_vad_silence()
                         wav_path = vad_record(timeout_sec=_VAD_TIMEOUT, silence_ms=silence_ms)
@@ -517,6 +519,7 @@ class VoiceProcessor:
 
                 # ==================== PROCESSING ====================
                 elif self._state == STATE_PROCESSING:
+                    logger.info("进入STATE_PROCESSING")
                     user_id = "u_temp_voice"
                     speaker = "未知用户"
                     audio_path = wav_path
