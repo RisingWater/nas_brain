@@ -509,6 +509,7 @@ class VoiceProcessor:
                 # ==================== RECORDING ====================
                 elif self._state == STATE_RECORDING:
                     logger.info("进入STATE_RECORDING")
+                    self._set_ai_status("listening", message="录音中")
                     try:
                         silence_ms = self._get_vad_silence()
                         wav_path = vad_record(timeout_sec=_VAD_TIMEOUT, silence_ms=silence_ms)
