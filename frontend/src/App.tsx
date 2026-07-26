@@ -17,6 +17,7 @@ import VoiceprintManager from './pages/VoiceprintManager';
 import Dashboard from './pages/Dashboard';
 import BackupManager from './pages/BackupManager';
 import TracePage from './pages/TracePage';
+import RssKnowledgePage from './pages/RssKnowledgePage';
 import AIStatusPage from './pages/AIStatusPage';
 
 export default function App() {
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/voiceprints" element={<VoiceprintManager />} />
           <Route path="/backup" element={<BackupManager />} />
           <Route path="/traces" element={<TracePage />} />
+          <Route path="/rss-knowledge" element={<RssKnowledgePage />} />
         </Route>
       </Routes>
     </BrowserRouter>

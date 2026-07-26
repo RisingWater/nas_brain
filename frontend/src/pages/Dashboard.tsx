@@ -66,7 +66,6 @@ export default function Dashboard() {
 
   const s = stats!;
   const dailyData = [...(s.daily || [])].reverse();
-  // 确保至少有一个占位数据让柱状图显示
   const chartData = dailyData.length > 0 ? dailyData
     : [{ date: new Date().toISOString().slice(0, 10), total: 0, answered: 0, avg_ms: 0, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }];
 
@@ -179,16 +178,18 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card size="small" title={<span><ThunderboltOutlined /> CPU（总计 {cpuPct}%）</span>}>
+          <Card size="small" title={<span><ThunderboltOutlined /> CPU</span>}>
             <div style={{ textAlign: 'center' }}>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
                   <Pie data={cpuData} dataKey="value" cx="50%" cy="50%" outerRadius={80} innerRadius={35}>
-                    {cpuData.map((_, idx) => (<Cell key={idx} fill={MEM_PIE_COLORS[idx % MEM_PIE_COLORS.length]} />))}
+                    <Cell fill="#ff4d4f" /><Cell fill="#e8e8e8" />
                   </Pie>
                   <Tooltip formatter={(v: number) => `${v}%`} />
                 </PieChart>
               </ResponsiveContainer>
+              <Text strong style={{ fontSize: 20, color: cpuPct > 80 ? '#ff4d4f' : '#52c41a' }}>{cpuPct}%</Text>
+              <Text type="secondary"> / 100%</Text>
             </div>
             <div style={{ marginTop: 8 }}>
               {cpuDetail.map(d => (
@@ -197,7 +198,10 @@ export default function Dashboard() {
                   <span>{d.pct}%</span>
                 </div>
               ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: 13, color: '#999', marginTop: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: 13, color: '#999' }}>
+                <span>空闲</span><span>{cpuRemaining}%</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: 12, color: '#999', marginTop: 2 }}>
                 <span>核数 {s.system.cpu.cores} · Load {s.system.cpu.load_1m.toFixed(2)}</span>
               </div>
             </div>
@@ -208,24 +212,19 @@ export default function Dashboard() {
       {/* ===== 两个卡片一行 ===== */}
       <Row gutter={12} style={{ marginBottom: 16 }}>
         <Col xs={12} md={6}>
-          <Card size="small" hoverable onClick={() => window.location.href = '/traces'}>
-            <Statistic title="Brain 运行时间" value={s.brain.uptime_seconds} valueStyle={{ fontSize: 20 }}
+          <Card size="small">
+            <Statistic title="Brain 持续运行" value={s.brain.uptime_seconds} valueStyle={{ fontSize: 20 }}
               prefix={<ClockCircleOutlined />}
               formatter={(v) => {
                 const sec = Number(v);
                 return `${Math.floor(sec / 86400)}天${Math.floor((sec % 86400) / 3600)}时${Math.floor((sec % 3600) / 60)}分`;
               }} />
-            <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>点击查看请求详情 →</div>
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card size="small">
-            <Statistic title="Token 总用量" value={s.brain.total_tokens.toLocaleString()} valueStyle={{ fontSize: 20, color: '#1677ff' }}
+            <Statistic title="本次启动 Token 用量" value={s.brain.total_tokens.toLocaleString()} valueStyle={{ fontSize: 20, color: '#1677ff' }}
               prefix={<RobotOutlined />} />
-            <Button type="link" icon={<FileTextOutlined />}
-              href="https://www.deepseek.com" target="_blank" style={{ padding: 0, fontSize: 12, marginTop: 2 }}>
-              DeepSeek 定价详情 →
-            </Button>
           </Card>
         </Col>
       </Row>

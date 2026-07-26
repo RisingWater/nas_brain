@@ -7,7 +7,7 @@ from src.common.utils import log_manager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from .routes import users, logs, dashboard
+from .routes import users, logs, dashboard, rss_knowledge
 import asyncio
 
 app = FastAPI(title="管理后端微服务", version="1.0.0")
@@ -25,6 +25,7 @@ app.add_middleware(
 app.include_router(users.router, prefix="/api/admin/users", tags=["用户管理"])
 app.include_router(logs.router, prefix="/api/logs", tags=["日志查看"])
 app.include_router(dashboard.router, prefix="/api/admin", tags=["监控面板"])
+app.include_router(rss_knowledge.router, prefix="/api/admin", tags=["RSS 知识"])
 
 
 @app.get("/health")
