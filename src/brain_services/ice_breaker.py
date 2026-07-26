@@ -75,10 +75,12 @@ class IceBreakerEngine:
             return
 
         if not candidates:
+            logger.debug("冰点: 无候选用户")
             return
 
         now = datetime.now()
         today = now.strftime("%Y-%m-%d")
+        logger.debug("冰点检查: %d 个候选用户", len(candidates))
 
         for group in candidates:
             try:
@@ -122,6 +124,7 @@ class IceBreakerEngine:
 
         # 1. 夜间模式
         if self._is_night_mode(config, now):
+            logger.debug("[%s] 免打扰时段，跳过", wechat_name)
             return
 
         state = self._state.setdefault(user_id, {
@@ -132,11 +135,13 @@ class IceBreakerEngine:
 
         # 2. 当天已尝试且无人回应 → 跳过
         if state["attempt_date"] == today:
+            logger.debug("[%s] 今日已尝试且无人回应，跳过", wechat_name)
             return
 
         # 3. 获取最新消息时间
         latest = self._get_latest_message(user_id)
         if not latest:
+            logger.debug("[%s] 无聊天记录，跳过", wechat_name)
             return
 
         latest_time_str = latest.get("created_at", "")
@@ -145,28 +150,38 @@ class IceBreakerEngine:
         except (ValueError, TypeError):
             return
 
-        # 4. 冷场检查
+        idle_sec = (now - latest_time).total_seconds()
         trigger_minutes = config.get("ice_breaker_trigger_minutes", 15)
-        if (now - latest_time).total_seconds() < trigger_minutes * 60:
+        logger.debug("[%s] 空闲 %.1f 分钟 (阈值=%d)", wechat_name, idle_sec / 60, trigger_minutes)
+
+        # 4. 冷场检查
+        if idle_sec < trigger_minutes * 60:
+            logger.debug("[%s] 未冷场，跳过", wechat_name)
             return
 
         # 5. 冷却检查
         cooldown_minutes = config.get("ice_breaker_cooldown_minutes", 60)
-        if time.time() - state["last_proactive_time"] < cooldown_minutes * 60:
+        elapsed_min = (time.time() - state["last_proactive_time"]) / 60
+        if elapsed_min < cooldown_minutes:
+            logger.debug("[%s] 冷却中: 已过 %.1f min < %d min", wechat_name, elapsed_min, cooldown_minutes)
             return
+        logger.debug("[%s] 冷却通过: 已过 %.1f min", wechat_name, elapsed_min)
 
         # 6. 上次冰点后是否有人回应
         if state["msg_id_at_send"] and state["attempt_date"]:
-            if not self._has_user_response(user_id, state["msg_id_at_send"]):
+            has_resp = self._has_user_response(user_id, state["msg_id_at_send"])
+            logger.debug("[%s] 检查回应: msg_id_at_send=%d, has_response=%s", wechat_name, state["msg_id_at_send"], has_resp)
+            if not has_resp:
                 state["attempt_date"] = today
-                logger.info("群 %s 上次冰点无人回应，今日跳过", wechat_name)
+                logger.info("[%s] 上次冰点无人回应，今日跳过", wechat_name)
                 return
             # 有人回应 → 重置
+            logger.info("[%s] 上次冰点有人回应，重置状态", wechat_name)
             state["msg_id_at_send"] = 0
             state["attempt_date"] = ""
 
         # 7. 发送冰点！
-        logger.info("冰点触发: %s (静默 %.1f 分钟)", wechat_name, (now - latest_time).total_seconds() / 60)
+        logger.info("[%s] 冰点触发! 静默 %.1f 分钟", wechat_name, (now - latest_time).total_seconds() / 60)
         self._generate_and_send(user_id, wechat_name, config, latest)
 
         state["last_proactive_time"] = time.time()

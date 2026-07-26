@@ -61,3 +61,12 @@ export async function getVadSilence(): Promise<number> {
 export async function setVadSilence(silence_ms: number): Promise<void> {
   await client.put('/admin/wakeword/vad-silence', { silence_ms });
 }
+
+export async function getDebugThreshold(): Promise<number> {
+  const { data } = await client.get('/admin/wakeword/debug-threshold');
+  return data.debug_threshold;
+}
+
+export async function setDebugThreshold(threshold: number): Promise<void> {
+  await client.put('/admin/wakeword/debug-threshold', { debug_threshold: threshold });
+}

@@ -8,6 +8,7 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   getThreshold, setThreshold, listRecords, updateCategory, deleteRecord, getAudioUrl,
   getFrameSamples, setFrameSamples, getVadSilence, setVadSilence,
+  getDebugThreshold, setDebugThreshold,
 } from '../api/wakeword';
 import type { WakewordRecord } from '../api/wakeword';
 
@@ -26,6 +27,7 @@ const categoryLabels: Record<string, string> = {
 
 export default function WakewordManager() {
   const [threshold, setThresholdVal] = useState(0.7);
+  const [debugThreshold, setDebugThresholdVal] = useState(0.5);
   const [frameSamples, setFrameSamplesVal] = useState(3200);
   const [vadSilence, setVadSilenceVal] = useState(1600);
   const [records, setRecords] = useState<WakewordRecord[]>([]);
@@ -90,6 +92,24 @@ export default function WakewordManager() {
     }
   };
 
+  const fetchDebugThreshold = async () => {
+    try {
+      const t = await getDebugThreshold();
+      setDebugThresholdVal(t);
+    } catch {
+      message.error('加载调试阈值失败');
+    }
+  };
+
+  const handleDebugThresholdSave = async () => {
+    try {
+      await setDebugThreshold(debugThreshold);
+      message.success('调试阈值已保存');
+    } catch {
+      message.error('保存失败');
+    }
+  };
+
   const handleVadSilenceSave = async () => {
     try {
       await setVadSilence(vadSilence);
@@ -101,6 +121,7 @@ export default function WakewordManager() {
 
   useEffect(() => {
     fetchThreshold();
+    fetchDebugThreshold();
     fetchFrameSamples();
     fetchVadSilence();
   }, []);
@@ -245,6 +266,38 @@ export default function WakewordManager() {
         </Col>
         <Col>
           <Button type="primary" onClick={handleThresholdSave}>保存阈值</Button>
+        </Col>
+      </Row>
+
+      {/* 调试阈值设置 */}
+      <Row gutter={16} align="middle" style={{ marginBottom: 16 }}>
+        <Col><Text strong>调试阈值：</Text></Col>
+        <Col flex="300px">
+          <Slider
+            min={0.0}
+            max={1.0}
+            step={0.05}
+            value={debugThreshold}
+            onChange={setDebugThresholdVal}
+          />
+        </Col>
+        <Col>
+          <InputNumber
+            min={0}
+            max={1}
+            step={0.05}
+            value={debugThreshold}
+            onChange={(v) => setDebugThresholdVal(v || 0.5)}
+            style={{ width: 80 }}
+          />
+        </Col>
+        <Col>
+          <Button type="primary" onClick={handleDebugThresholdSave}>保存调试阈值</Button>
+        </Col>
+        <Col>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            高于此值但低于检测阈值的唤醒词会保存音频供分析
+          </Text>
         </Col>
       </Row>
 
