@@ -477,7 +477,6 @@ class VoiceProcessor:
                         wakeword_id = self._save_wakeword_audio(chunk, 16000, best)
                         buffer.clear()
                         trace_request_id = f"voice_{uuid.uuid4().hex[:12]}"
-                        _trace_event(trace_request_id, "wakeword", score=best)
                         self._close_wakeword_stream()
                         self._state = STATE_PLAYING
                         self.play_sync("我在呢")
