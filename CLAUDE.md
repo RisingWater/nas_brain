@@ -359,13 +359,23 @@ cfg.get_service_url("voice_gateway", "/api/voice/speak")
 
 `src/common/utils/tracer.py` — 全链路耗时追踪，数据存 `db_services` 的 `request_traces` 表。
 
-### 打点 API
+### 打点 API（严格参数，不可随意加字段）
 
-| 函数 | 用途 | 调用方 |
-|------|------|--------|
-| `trace_event(request_id, stage, ...)` | 记录一个事件（带毫秒时间戳） | 各微服务 |
-| `trace_content(request_id, content)` | 更新请求内容（用户说的话） | voice_gateway |
-| `trace_reply(request_id, reply)` | 更新回复内容 | brain_services |
+| 函数 | 用途 |
+|------|------|
+| `trace_event(request_id, stage, metadata=None, protocol="", user_id="")` | 记录一个事件时间戳 |
+| `trace_content(request_id, content)` | 更新请求内容（用户说的话） |
+| `trace_reply(request_id, reply="", skip=False)` | 更新回复内容 |
+
+⚠️ **`trace_event` 只有 5 个形参**：`request_id`、`stage`、`metadata`、`protocol`、`user_id`。**不要传 `score`、`speaker` 等不在签名里的字段**，会 TypeError 崩溃。这些数据请放 `metadata` 字典里：
+
+```python
+# ✅ 正确
+trace_event(req_id, "voiceprint_end", metadata={"speaker": "张三", "score": 0.85})
+
+# ❌ 错误 — score 不是合法参数，会报错
+trace_event(req_id, "wakeword", score=0.9)
+```
 
 ### 阶段定义
 
