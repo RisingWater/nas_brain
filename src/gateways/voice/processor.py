@@ -391,6 +391,7 @@ class VoiceProcessor:
         try:
             import pyaudio
             from livekit.wakeword import WakeWordModel
+            from src.common.utils.tracer import trace_event as _trace_event, trace_content as _trace_content, trace_reply as _trace_reply
             # ---- ONNX Runtime 补丁（必须在任何 onnxruntime 使用前执行） ----
             import onnxruntime as ort
             _orig_init = ort.InferenceSession.__init__
@@ -491,6 +492,8 @@ class VoiceProcessor:
 
                         wakeword_id = self._save_wakeword_audio(chunk, 16000, best)
                         buffer.clear()
+                        trace_request_id = f"voice_{uuid.uuid4().hex[:12]}"
+                        _trace_event(trace_request_id, "wakeword", score=best)
                         self._close_wakeword_stream()
                         self._state = STATE_PLAYING
                         self.play_sync("我在呢")
@@ -509,7 +512,15 @@ class VoiceProcessor:
                 # ==================== RECORDING ====================
                 elif self._state == STATE_RECORDING:
                     logger.info("进入STATE_RECORDING")
-                    self._set_ai_status("listening", message="录音中")
+
+                    # 开线程发 HTTP（ai_status + trace），不阻塞录音
+                    def _recording_setup():
+                        self._set_ai_status("listening", message="录音中")
+                        _trace_event(trace_request_id, "wakeword", protocol="voice")
+                    setup_thread = threading.Thread(target=_recording_setup, daemon=True)
+                    setup_thread.start()
+
+                    # 立即开始 VAD 录音（与 HTTP 并行）
                     try:
                         silence_ms = self._get_vad_silence()
                         wav_path = vad_record(timeout_sec=_VAD_TIMEOUT, silence_ms=silence_ms)
@@ -518,23 +529,32 @@ class VoiceProcessor:
                         self._state = STATE_IDLE
                         self._update_wakeword_category(wakeword_id, "negative")
                         continue
+
+                    # 等待 HTTP 完成
+                    setup_thread.join(timeout=3)
+                    _trace_event(trace_request_id, "record_end")
                     self._state = STATE_PROCESSING
                     continue
 
                 # ==================== PROCESSING ====================
                 elif self._state == STATE_PROCESSING:
                     logger.info("进入STATE_PROCESSING")
+                    self._set_ai_status("thinking", message="处理中")
+                    _trace_event(trace_request_id, "brain_receive", protocol="voice", user_id="u_temp_voice")
                     user_id = "u_temp_voice"
                     speaker = "未知用户"
                     audio_path = wav_path
                     text = ""
                     try:
                         user_id, speaker, audio_path = self._vp.detect(wav_path, wakeword_id)
+                        _trace_event(trace_request_id, "voiceprint_end", speaker=speaker)
                     except Exception as e:
                         logger.warning("声纹识别失败: %s", e)
                     try:
                         text = self._stt.transcribe(audio_path)
                         logger.info("STT 结果: %s", text[:100])
+                        _trace_event(trace_request_id, "stt_end")
+                        _trace_content(trace_request_id, text)
                     except Exception as e:
                         logger.warning("STT 失败: %s", e)
 
@@ -560,6 +580,8 @@ class VoiceProcessor:
                     }
                     try:
                         requests.post(url, json=req_body, timeout=10)
+                        _trace_event(trace_request_id, "brain_done")
+                        _trace_reply(trace_request_id, reply=text)
                     except Exception as e:
                         logger.error("brain_services 调用失败: %s", e)
 
