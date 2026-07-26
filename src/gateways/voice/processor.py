@@ -40,7 +40,6 @@ class VoiceProcessor:
         self._stt = STT()
         self._vp = VoiceprintEngine()
         self._play_queue: queue.Queue = queue.Queue()
-        self._wakeword_stream = None  # pyaudio 输入流，仅 IDLE 状态使用
 
     # ---- 公开方法 ----
 
@@ -121,16 +120,19 @@ class VoiceProcessor:
             stream = pa.open(format=fmt, channels=channels, rate=sr, output=True, frames_per_buffer=chunk_frames)
             
             # 分块写入
+            audio_duration = len(pcm) / (sw * channels * sr)  # 音频总时长（秒）
             offset = 0
             data_len = len(pcm)
+            write_start = time.time()
             while offset < data_len:
                 end = min(offset + chunk_bytes, data_len)
                 stream.write(pcm[offset:end])
                 offset = end
-            
-            # 等待缓冲区排空
-            while stream.is_active():
-                time.sleep(0.01)
+
+            # 直接 sleep 剩余播放时间，避免 stream.is_active() 在某些后端死等
+            remaining = max(0, audio_duration - (time.time() - write_start))
+            if remaining > 0:
+                time.sleep(remaining)
             stream.stop_stream()
                 
         except Exception as e:
@@ -168,6 +170,7 @@ class VoiceProcessor:
         只从 _run_loop 调用（播放队列或唤醒词流程），无需忙等。
         """
         self._set_ai_status("speaking", message=text[:80])
+        self.set_state(STATE_PLAYING)
         logger.warning(f"play_sync 开始播放 {text}")
         import pyaudio as _pa
         _pa_instance = _pa.PyAudio()
@@ -269,43 +272,6 @@ class VoiceProcessor:
     def set_state(self, s: int):
         with self._lock:
             self._state = s
-
-    def _close_wakeword_stream(self):
-        """关掉唤醒词检测流（IDLE→其他状态时调用）"""
-        if self._wakeword_stream:
-            try:
-                self._wakeword_stream.close()
-                logger.debug("唤醒词检测流已关闭")
-            except Exception as e:
-                logger.warning("关闭唤醒词检测流异常: %s", e)
-            self._wakeword_stream = None
-
-    def _get_debug_threshold(self) -> float:
-        """获取调试阈值（低于主阈值但高于此值时记录调试信息）"""
-        try:
-            url = cfg.get_service_url("db_services", "/api/wakeword/debug-threshold")
-            resp = requests.get(url, timeout=5)
-            if resp.status_code == 200:
-                return resp.json().get("debug_threshold", 0.5)
-        except Exception:
-            pass
-        return 0.5
-
-    def _save_debug_audio(self, audio: np.ndarray, sr: int, score: float):
-        """保存调试音频（接近阈值但未触发的唤醒候选）"""
-        debug_dir = os.path.join(_WAKEWORD_DIR, "debug")
-        os.makedirs(debug_dir, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filepath = os.path.join(debug_dir, f"{ts}_{score:.4f}.wav")
-        try:
-            with wave.open(filepath, "wb") as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(sr)
-                wf.writeframes(audio.tobytes())
-            logger.debug("调试音频已保存: %s (score=%.4f)", filepath, score)
-        except Exception as e:
-            logger.warning("保存调试音频失败: %s", e)
 
     # ---- 唤醒词检测 ----
 
@@ -413,30 +379,50 @@ class VoiceProcessor:
 
         try:
             model = WakeWordModel(models=[_MODEL_PATH])
+            threshold = self._get_threshold()
+            frame_samples = self._get_frame_samples()
+            buffer_frames = max(1, 32000 // frame_samples)  # ~2 秒的帧数
 
             pa = pyaudio.PyAudio()
+            stream = pa.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                frames_per_buffer=frame_samples,
+            )
+            logger.info("唤醒词就绪，阈值=%.2f, 帧大小=%d, 缓冲帧数=%d",
+                         threshold, frame_samples, buffer_frames)
+
             buffer: list[np.ndarray] = []
             last_detection_time = 0.0
             debounce = 1.0
             check_counter = 0
 
             while self._running:
-                # ==================== IDLE ====================
-                if self._state == STATE_IDLE:
-                    # 1. 播放队列优先
-                    if not self._play_queue.empty():
-                        self._close_wakeword_stream()
-                        self._state = STATE_PLAYING
-                        continue
+                # 1. 优先播放队列（外部请求串行）
+                if not self._play_queue.empty():
+                    logger.debug("播放队列: %s", self._play_queue.qsize())
+                    q_text, q_request_id = self._play_queue.get()
+                    buffer.clear()  # 清缓存，避免旧音频导致唤醒误检
+                    self.play_sync(q_text, q_request_id)
+                    # 清 pyaudio 环形缓冲区，播放期间的录音（含回声）不进入唤醒检测
+                    for _ in range(int(0.5 * 16000 / frame_samples)):
+                        stream.read(frame_samples, exception_on_overflow=False)
+                    continue
 
-                    # 2. 确保流开着
-                    threshold = self._get_threshold()
-                    frame_samples = self._get_frame_samples()
-                    buffer_frames = max(1, 32000 // frame_samples)
-
-                    if self._wakeword_stream is None:
-                        logger.info("开启唤醒词检测流")
-                        self._wakeword_stream = pa.open(
+                # 每积累 80000 采样数检查一次帧大小变化（约 5 秒）
+                check_counter += 1
+                if check_counter * frame_samples >= 80000:
+                    check_counter = 0
+                    new_fs = self._get_frame_samples()
+                    if new_fs != frame_samples:
+                        logger.info("帧大小 %d → %d，重开音频流", frame_samples, new_fs)
+                        stream.close()
+                        frame_samples = new_fs
+                        buffer_frames = max(1, 32000 // frame_samples)
+                        buffer.clear()
+                        stream = pa.open(
                             format=pyaudio.paInt16,
                             channels=1,
                             rate=16000,
@@ -444,82 +430,48 @@ class VoiceProcessor:
                             frames_per_buffer=frame_samples,
                         )
 
-                    # 3. 每积累 80000 采样数检查一次帧大小变化（约 5 秒）
-                    check_counter += 1
-                    if check_counter * frame_samples >= 80000:
-                        check_counter = 0
-                        new_fs = self._get_frame_samples()
-                        if new_fs != frame_samples:
-                            logger.info("帧大小 %d → %d，重开音频流", frame_samples, new_fs)
-                            self._close_wakeword_stream()
-                            frame_samples = new_fs
-                            buffer.clear()
-                            self._wakeword_stream = pa.open(
-                                format=pyaudio.paInt16,
-                                channels=1,
-                                rate=16000,
-                                input=True,
-                                frames_per_buffer=frame_samples,
-                            )
+                # 读一帧音频
+                data = stream.read(frame_samples, exception_on_overflow=False)
+                frame = np.frombuffer(data, dtype=np.int16)
+                buffer.append(frame)
 
-                    # 4. 读帧
-                    data = self._wakeword_stream.read(frame_samples, exception_on_overflow=False)
-                    frame = np.frombuffer(data, dtype=np.int16)
-                    buffer.append(frame)
-                    while len(buffer) > buffer_frames:
-                        buffer.pop(0)
-                    if len(buffer) < buffer_frames:
-                        continue
+                # 只保留最近 buffer_frames 帧
+                while len(buffer) > buffer_frames:
+                    buffer.pop(0)
 
-                    # 5. 唤醒检测
-                    chunk = np.concatenate(buffer)
-                    scores = model.predict(chunk)
-                    best = max(scores.values()) if scores else 0.0
-
-                    debug_threshold = self._get_debug_threshold()
-                    if debug_threshold <= best < threshold:
-                        logger.debug("唤醒词候选: score=%.4f (调试=%.2f, 主阈值=%.2f)", best, debug_threshold, threshold)
-                        self._save_debug_audio(chunk, 16000, best)
-
-                    now = time.time()
-                    if best >= threshold and (now - last_detection_time) >= debounce:
-                        last_detection_time = now
-                        logger.info("检测到唤醒词: score=%.4f", best)
-
-                        wakeword_id = self._save_wakeword_audio(chunk, 16000, best)
-                        buffer.clear()
-                        self._close_wakeword_stream()
-                        self._state = STATE_PLAYING
-                        self.play_sync("我在呢")
-                        self._state = STATE_RECORDING
-                        continue
-
-                # ==================== PLAYING ====================
-                elif self._state == STATE_PLAYING:
-                    logger.info("进入STATE_PLAYING")
-                    text, request_id = self._play_queue.get()
-                    self._close_wakeword_stream()
-                    self.play_sync(text, request_id)
-                    self._state = STATE_IDLE
+                # 凑够 buffer_frames 帧才推理
+                if len(buffer) < buffer_frames:
                     continue
 
-                # ==================== RECORDING ====================
-                elif self._state == STATE_RECORDING:
-                    logger.info("进入STATE_RECORDING")
+                chunk = np.concatenate(buffer)
+                scores = model.predict(chunk)
+                best = max(scores.values()) if scores else 0.0
+
+                now = time.time()
+                if best >= threshold and (now - last_detection_time) >= debounce:
+                    last_detection_time = now
+                    logger.info("检测到唤醒词: score=%.4f", best)
+
+                    # 保存唤醒音频
+                    wakeword_id = self._save_wakeword_audio(chunk, 16000, best)
+                    buffer.clear()  # 清缓存，避免重复检测
+
+                    # 播"我在呢"（阻塞）
+                    self.play_sync("我在呢")
+
+                    # VAD 录音（阻塞）
+                    self.set_state(STATE_RECORDING)
                     try:
                         silence_ms = self._get_vad_silence()
                         wav_path = vad_record(timeout_sec=_VAD_TIMEOUT, silence_ms=silence_ms)
                     except Exception as e:
                         logger.error("VAD 录音失败: %s", e)
-                        self._state = STATE_IDLE
+                        self.set_state(STATE_IDLE)
                         self._update_wakeword_category(wakeword_id, "negative")
                         continue
-                    self._state = STATE_PROCESSING
-                    continue
 
-                # ==================== PROCESSING ====================
-                elif self._state == STATE_PROCESSING:
-                    logger.info("进入STATE_PROCESSING")
+                    # 声纹 + STT
+                    self.set_state(STATE_PROCESSING)
                     user_id = "u_temp_voice"
                     speaker = "未知用户"
                     audio_path = wav_path
@@ -537,13 +489,10 @@ class VoiceProcessor:
                     if not text.strip():
                         logger.info("未检测到语音，跳过")
                         self._update_wakeword_category(wakeword_id, "negative")
-                        self._wakeword_stream = pa.open(
-                            format=pyaudio.paInt16, channels=1, rate=16000,
-                            input=True, frames_per_buffer=self._get_frame_samples(),
-                        )
-                        self._state = STATE_IDLE
+                        self.set_state(STATE_IDLE)
                         continue
 
+                    # brain POST
                     url = cfg.get_service_url("brain_services", "/api/agent-request")
                     req_body = {
                         "protocol": "voice",
@@ -559,15 +508,13 @@ class VoiceProcessor:
                     except Exception as e:
                         logger.error("brain_services 调用失败: %s", e)
 
+                    self.set_state(STATE_IDLE)
                     buffer.clear()
-                    logger.info("重新开启唤醒词检测流")
-                    self._wakeword_stream = pa.open(
-                        format=pyaudio.paInt16, channels=1, rate=16000,
-                        input=True, frames_per_buffer=self._get_frame_samples(),
-                    )
-                    self._state = STATE_IDLE
+                    # 清 pyaudio 环形缓冲区
+                    for _ in range(int(0.5 * 16000 / frame_samples)):
+                        stream.read(frame_samples, exception_on_overflow=False)
 
-            self._close_wakeword_stream()
+            stream.close()
             pa.terminate()
 
         except Exception as e:
