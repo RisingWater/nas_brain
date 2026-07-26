@@ -103,6 +103,7 @@ export default function Dashboard() {
     pct: cpuServices[k] || 0,
     color: MEM_PIE_COLORS[i % MEM_PIE_COLORS.length],
   }));
+  const cpuRemaining = Math.max(0, 100 - cpuPct);
 
   const storageDetail = [
     { label: '数据库', size: s.storage.db_size, color: STORAGE_PIE_COLORS[0] },

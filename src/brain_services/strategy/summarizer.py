@@ -182,7 +182,7 @@ class SummaryScheduler:
         if not summary:
             logger.warning("用户 %s 总结生成失败", user_id)
             return
-        summary = summary[:2000]
+        summary = summary[:800]
 
         # 7. 存入 chat_summaries
         try:
