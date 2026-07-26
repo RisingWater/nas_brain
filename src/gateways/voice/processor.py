@@ -399,9 +399,13 @@ class VoiceProcessor:
             while self._running:
                 # 1. 优先播放队列（外部请求串行）
                 if not self._play_queue.empty():
+                    logger.debug("播放队列: %s", self._play_queue.qsize())
                     q_text, q_request_id = self._play_queue.get()
                     buffer.clear()  # 清缓存，避免旧音频导致唤醒误检
                     self.play_sync(q_text, q_request_id)
+                    # 清 pyaudio 环形缓冲区，播放期间的录音（含回声）不进入唤醒检测
+                    for _ in range(int(0.5 * 16000 / frame_samples)):
+                        stream.read(frame_samples, exception_on_overflow=False)
                     continue
 
                 # 每积累 80000 采样数检查一次帧大小变化（约 5 秒）
@@ -502,6 +506,10 @@ class VoiceProcessor:
                         logger.error("brain_services 调用失败: %s", e)
 
                     self.set_state(STATE_IDLE)
+                    buffer.clear()
+                    # 清 pyaudio 环形缓冲区
+                    for _ in range(int(0.5 * 16000 / frame_samples)):
+                        stream.read(frame_samples, exception_on_overflow=False)
 
             stream.close()
             pa.terminate()
