@@ -12,6 +12,8 @@ from ..schema.wakeword_schema import (
 router = APIRouter()
 
 _KV_THRESHOLD_KEY = "wakeword_threshold"
+_KV_DEBUG_THRESHOLD_KEY = "wakeword_debug_threshold"
+_DEFAULT_DEBUG_THRESHOLD = 0.5
 _DEFAULT_THRESHOLD = 0.7
 _KV_FRAME_SAMPLES_KEY = "wakeword_frame_samples"
 _DEFAULT_FRAME_SAMPLES = 3200
@@ -73,6 +75,33 @@ def set_threshold(body: dict):
     )
     conn.commit()
     return {"success": True, "threshold": threshold}
+
+
+@router.get("/debug-threshold")
+def get_debug_threshold():
+    """获取调试阈值"""
+    conn = db.get_connection()
+    row = conn.execute("SELECT value FROM kv_store WHERE key = ?", (_KV_DEBUG_THRESHOLD_KEY,)).fetchone()
+    if not row:
+        return {"debug_threshold": _DEFAULT_DEBUG_THRESHOLD}
+    return {"debug_threshold": float(row[0])}
+
+
+@router.put("/debug-threshold")
+def set_debug_threshold(body: dict):
+    """设置调试阈值"""
+    threshold = float(body.get("debug_threshold", _DEFAULT_DEBUG_THRESHOLD))
+    threshold = max(0.0, min(1.0, threshold))
+    conn = db.get_connection()
+    conn.execute(
+        """INSERT INTO kv_store (key, value, namespace, updated_at)
+           VALUES (?, ?, 'wakeword', CURRENT_TIMESTAMP)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value,
+                                          updated_at = CURRENT_TIMESTAMP""",
+        (_KV_DEBUG_THRESHOLD_KEY, str(threshold)),
+    )
+    conn.commit()
+    return {"success": True, "debug_threshold": threshold}
 
 
 # ---- 帧大小 ----

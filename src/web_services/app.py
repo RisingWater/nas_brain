@@ -407,6 +407,11 @@ async def proxy_strategy_summarize(user_id: str, request: Request):
 async def proxy_wakeword_threshold(request: Request):
     return await _proxy_to_db("/api/wakeword/threshold", request)
 
+
+@app.api_route("/api/admin/wakeword/debug-threshold", methods=["GET", "PUT"])
+async def proxy_wakeword_debug_threshold(request: Request):
+    return await _proxy_to_db("/api/wakeword/debug-threshold", request)
+
 @app.api_route("/api/admin/wakeword/frame-samples", methods=["GET", "PUT"])
 async def proxy_wakeword_frame_samples(request: Request):
     return await _proxy_to_db("/api/wakeword/frame-samples", request)
