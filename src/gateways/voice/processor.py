@@ -138,7 +138,7 @@ class VoiceProcessor:
                 
         except Exception as e:
             # ✅ 捕获所有异常并输出详细堆栈
-            print(f"[ERROR] _play_audio 异常: {e}")
+            logger.error(f"[ERROR] _play_audio 异常: {e}")
             print(traceback.format_exc())
             # 不重新抛出，让 finally 执行清理
             
