@@ -391,7 +391,7 @@ class VoiceProcessor:
         try:
             import pyaudio
             from livekit.wakeword import WakeWordModel
-            from src.common.utils.tracer import trace_event as _trace_event, trace_content as _trace_content, trace_reply as _trace_reply
+            from src.common.utils.tracer import trace_event as _trace_event, trace_content as _trace_content
             # ---- ONNX Runtime 补丁（必须在任何 onnxruntime 使用前执行） ----
             import onnxruntime as ort
             _orig_init = ort.InferenceSession.__init__
@@ -424,6 +424,10 @@ class VoiceProcessor:
             debounce = 1.0
             check_counter = 0
 
+            # 在循环外获取阈值
+            threshold = self._get_threshold()
+            frame_samples = self._get_frame_samples()
+
             while self._running:
                 # ==================== IDLE ====================
                 if self._state == STATE_IDLE:
@@ -434,8 +438,6 @@ class VoiceProcessor:
                         continue
 
                     # 2. 确保流开着
-                    threshold = self._get_threshold()
-                    frame_samples = self._get_frame_samples()
                     buffer_frames = max(1, 32000 // frame_samples)
 
                     if self._wakeword_stream is None:
@@ -448,25 +450,7 @@ class VoiceProcessor:
                             frames_per_buffer=frame_samples,
                         )
 
-                    # 3. 每积累 80000 采样数检查一次帧大小变化（约 5 秒）
-                    check_counter += 1
-                    if check_counter * frame_samples >= 80000:
-                        check_counter = 0
-                        new_fs = self._get_frame_samples()
-                        if new_fs != frame_samples:
-                            logger.info("帧大小 %d → %d，重开音频流", frame_samples, new_fs)
-                            self._close_wakeword_stream()
-                            frame_samples = new_fs
-                            buffer.clear()
-                            self._wakeword_stream = pa.open(
-                                format=pyaudio.paInt16,
-                                channels=1,
-                                rate=16000,
-                                input=True,
-                                frames_per_buffer=frame_samples,
-                            )
-
-                    # 4. 读帧
+                    # 3. 读帧
                     data = self._wakeword_stream.read(frame_samples, exception_on_overflow=False)
                     frame = np.frombuffer(data, dtype=np.int16)
                     buffer.append(frame)
@@ -475,7 +459,7 @@ class VoiceProcessor:
                     if len(buffer) < buffer_frames:
                         continue
 
-                    # 5. 唤醒检测
+                    # 4. 唤醒检测
                     chunk = np.concatenate(buffer)
                     scores = model.predict(chunk)
                     best = max(scores.values()) if scores else 0.0
@@ -515,7 +499,7 @@ class VoiceProcessor:
 
                     # 开线程发 HTTP（ai_status + trace），不阻塞录音
                     def _recording_setup():
-                        self._set_ai_status("listening", message="录音中")
+                        self._set_ai_status("listening")
                         _trace_event(trace_request_id, "wakeword", protocol="voice")
                     setup_thread = threading.Thread(target=_recording_setup, daemon=True)
                     setup_thread.start()
@@ -539,25 +523,28 @@ class VoiceProcessor:
                 # ==================== PROCESSING ====================
                 elif self._state == STATE_PROCESSING:
                     logger.info("进入STATE_PROCESSING")
-                    self._set_ai_status("thinking", message="处理中")
                     _trace_event(trace_request_id, "brain_receive", protocol="voice", user_id="u_temp_voice")
                     user_id = "u_temp_voice"
                     speaker = "未知用户"
                     audio_path = wav_path
                     text = ""
+
+                    # 声纹识别
                     try:
                         user_id, speaker, audio_path = self._vp.detect(wav_path, wakeword_id)
-                        _trace_event(trace_request_id, "voiceprint_end", speaker=speaker)
                     except Exception as e:
                         logger.warning("声纹识别失败: %s", e)
+                    _trace_event(trace_request_id, "voiceprint_end", metadata={"speaker": speaker, "user_id": user_id})
+                    
+                    # STT识别
                     try:
                         text = self._stt.transcribe(audio_path)
                         logger.info("STT 结果: %s", text[:100])
-                        _trace_event(trace_request_id, "stt_end")
-                        _trace_content(trace_request_id, text)
                     except Exception as e:
                         logger.warning("STT 失败: %s", e)
+                    _trace_event(trace_request_id, "stt_end")
 
+                    # 检测有没有有效的识别结果
                     if not text.strip():
                         logger.info("未检测到语音，跳过")
                         self._update_wakeword_category(wakeword_id, "negative")
@@ -568,10 +555,14 @@ class VoiceProcessor:
                         self._state = STATE_IDLE
                         continue
 
+                    # 记录识别结果
+                    _trace_content(trace_request_id, text)
+                    self._set_ai_status("thinking", speaker=speaker, message=text[:80])
+
                     url = cfg.get_service_url("brain_services", "/api/agent-request")
                     req_body = {
                         "protocol": "voice",
-                        "request_id": f"voice_{uuid.uuid4().hex[:12]}",
+                        "request_id": trace_request_id,
                         "chat_type": "voice",
                         "user_id": user_id,
                         "content_type": "text",
@@ -580,17 +571,10 @@ class VoiceProcessor:
                     }
                     try:
                         requests.post(url, json=req_body, timeout=10)
-                        _trace_event(trace_request_id, "brain_done")
-                        _trace_reply(trace_request_id, reply=text)
                     except Exception as e:
                         logger.error("brain_services 调用失败: %s", e)
 
                     buffer.clear()
-                    logger.info("重新开启唤醒词检测流")
-                    self._wakeword_stream = pa.open(
-                        format=pyaudio.paInt16, channels=1, rate=16000,
-                        input=True, frames_per_buffer=self._get_frame_samples(),
-                    )
                     self._state = STATE_IDLE
 
             self._close_wakeword_stream()
