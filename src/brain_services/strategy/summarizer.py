@@ -12,6 +12,7 @@ logger = logging.getLogger("brain_services.strategy.summarizer")
 _SUMMARY_SYSTEM_PROMPT = (
     "你是一个对话摘要助手。请将以下聊天记录压缩为简洁的总结，"
     "保留重要的事件、决定、用户偏好和关键信息。"
+    "如果总字数超过 800 字，允许丢弃一些不重要的旧信息。"
     "用中文，控制在 800 字以内。"
 )
 
@@ -175,8 +176,9 @@ class SummaryScheduler:
 
         prompt = (
             "你是一个对话摘要助手。请将之前的总结和新增的聊天记录合并为一份新的简洁总结，"
-            "保留重要的事件、决定、用户偏好和关键信息。用中文，控制在 800 字以内。\n\n"
-            f"{log_text}"
+            "保留重要的事件、决定、用户偏好和关键信息。"
+            "如果总字数超过 800 字，允许丢弃一些不重要的旧信息。"
+            f"用中文，控制在 800 字以内。\n\n{log_text}"
         )
         summary = self.deepseek.ask_single_question(prompt, timeout=30)
         if not summary:
