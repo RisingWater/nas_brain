@@ -412,6 +412,26 @@ async def proxy_wakeword_threshold(request: Request):
 async def proxy_wakeword_debug_threshold(request: Request):
     return await _proxy_to_db("/api/wakeword/debug-threshold", request)
 
+@app.api_route("/api/admin/wakeword/debug/list", methods=["GET"])
+async def proxy_wakeword_debug_list(request: Request):
+    return await _proxy_to_db("/api/wakeword/debug/list", request)
+
+@app.api_route("/api/admin/wakeword/debug/{filename}/audio", methods=["GET"])
+async def proxy_wakeword_debug_audio(filename: str, request: Request):
+    return await _proxy_to_db(f"/api/wakeword/debug/{filename}/audio", request)
+
+@app.api_route("/api/admin/wakeword/debug/{filename}/classify", methods=["POST"])
+async def proxy_wakeword_debug_classify(filename: str, request: Request):
+    return await _proxy_to_db(f"/api/wakeword/debug/{filename}/classify", request)
+
+@app.api_route("/api/admin/wakeword/debug/{filename}", methods=["DELETE"])
+async def proxy_wakeword_debug_delete(filename: str, request: Request):
+    return await _proxy_to_db(f"/api/wakeword/debug/{filename}", request)
+
+@app.api_route("/api/admin/wakeword/package", methods=["GET"])
+async def proxy_wakeword_package(request: Request):
+    return await _proxy_to_db("/api/wakeword/package", request)
+
 @app.api_route("/api/admin/wakeword/frame-samples", methods=["GET", "PUT"])
 async def proxy_wakeword_frame_samples(request: Request):
     return await _proxy_to_db("/api/wakeword/frame-samples", request)

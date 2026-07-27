@@ -70,3 +70,31 @@ export async function getDebugThreshold(): Promise<number> {
 export async function setDebugThreshold(threshold: number): Promise<void> {
   await client.put('/admin/wakeword/debug-threshold', { debug_threshold: threshold });
 }
+
+export interface DebugAudioItem {
+  filename: string;
+  score: number;
+  created_at: string;
+  size: number;
+}
+
+export async function listDebugAudio(): Promise<DebugAudioItem[]> {
+  const { data } = await client.get('/admin/wakeword/debug/list');
+  return data.items;
+}
+
+export function getDebugAudioUrl(filename: string): string {
+  return `/api/admin/wakeword/debug/${filename}/audio`;
+}
+
+export async function classifyDebugAudio(filename: string, category: string): Promise<void> {
+  await client.post(`/admin/wakeword/debug/${filename}/classify`, { category });
+}
+
+export async function deleteDebugAudio(filename: string): Promise<void> {
+  await client.delete(`/admin/wakeword/debug/${filename}`);
+}
+
+export function getPackageUrl(): string {
+  return '/api/admin/wakeword/package';
+}

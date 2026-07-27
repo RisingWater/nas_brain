@@ -1,8 +1,14 @@
 """db_services — 唤醒词记录 + 阈值"""
 import os
+import glob
+import json
+import shutil
+import zipfile
+import io
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from typing import Optional
+from datetime import datetime
 from ..db_connection import db
 from ..schema.wakeword_schema import (
     WakewordRecordCreate, WakewordRecordResponse, WakewordListResponse,
@@ -282,3 +288,87 @@ def delete_old_records(before_id: Optional[int] = Query(None)):
         conn.execute("DELETE FROM wakeword_records")
     conn.commit()
     return {"success": True}
+
+
+_WAKEWORD_DIR = os.getenv("WAKEWORD_DIR", "data/wakeword")
+
+
+# ---- 调试音频 ----
+@router.get("/debug/list")
+def list_debug_audio():
+    """列出调试音频文件"""
+    debug_dir = os.path.join(_WAKEWORD_DIR, "debug")
+    items = []
+    if os.path.isdir(debug_dir):
+        for fp in sorted(glob.glob(os.path.join(debug_dir, "*.wav")), reverse=True):
+            fname = os.path.basename(fp)
+            parts = fname.replace(".wav", "").split("_")
+            score = float(parts[-1]) if len(parts) >= 3 and parts[-1].replace(".", "").isdigit() else 0.0
+            try:
+                mtime = os.path.getmtime(fp)
+                created = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                created = ""
+            items.append({"filename": fname, "score": score, "created_at": created, "size": os.path.getsize(fp)})
+    return {"items": items}
+
+
+@router.get("/debug/{filename}/audio")
+def get_debug_audio(filename: str):
+    filepath = os.path.join(_WAKEWORD_DIR, "debug", filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(404, "文件不存在")
+    return FileResponse(filepath, media_type="audio/wav")
+
+
+@router.post("/debug/{filename}/classify")
+def classify_debug_audio(filename: str, req: WakewordCategoryUpdate):
+    src = os.path.join(_WAKEWORD_DIR, "debug", filename)
+    if not os.path.exists(src):
+        raise HTTPException(404, "文件不存在")
+    dst = os.path.join(_WAKEWORD_DIR, filename)
+    shutil.copy2(src, dst)
+    parts = filename.replace(".wav", "").split("_")
+    score = float(parts[-1]) if len(parts) >= 3 and parts[-1].replace(".", "").isdigit() else 0.0
+    wakeword_id = f"debug_{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename[:8]}"
+    conn = db.get_connection()
+    try:
+        cursor = conn.execute(
+            "INSERT INTO wakeword_records (wakeword_id, file_path, score, category) VALUES (?, ?, ?, ?)",
+            (wakeword_id, dst, score, req.category),
+        )
+        conn.commit()
+    except Exception as e:
+        raise HTTPException(400, f"创建记录失败: {e}")
+    try:
+        os.remove(src)
+    except Exception:
+        pass
+    return {"success": True, "id": cursor.lastrowid, "category": req.category}
+
+
+@router.delete("/debug/{filename}")
+def delete_debug_audio(filename: str):
+    filepath = os.path.join(_WAKEWORD_DIR, "debug", filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(404, "文件不存在")
+    os.remove(filepath)
+    return {"success": True}
+
+
+# ---- 打包 ----
+@router.get("/package")
+def package_wakeword():
+    import io
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        conn = db.get_connection()
+        for row in conn.execute(
+            "SELECT file_path, category FROM wakeword_records WHERE category IN ('positive', 'negative')"
+        ).fetchall():
+            if os.path.exists(row["file_path"]):
+                zf.write(row["file_path"], f"{row['category']}/{os.path.basename(row['file_path'])}")
+    zip_buffer.seek(0)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return FileResponse(zip_buffer, media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="wakeword_package_{ts}.zip"'})
