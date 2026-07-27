@@ -366,7 +366,7 @@ def package_wakeword():
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         conn = db.get_connection()
         for row in conn.execute(
-            "SELECT file_path, category FROM wakeword_records"
+            "SELECT file_path, category FROM wakeword_records WHERE category IN ('positive', 'negative')"
         ).fetchall():
             fp = row["file_path"]
             cat = row["category"]
