@@ -14,7 +14,7 @@ logger = logging.getLogger("web_services.wakeword")
 
 router = APIRouter()
 
-_PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 
 @router.get("/wakeword/package")

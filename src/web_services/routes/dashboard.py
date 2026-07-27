@@ -36,43 +36,31 @@ def _get_dir_size(path: str) -> int:
 
 
 def _get_service_memory() -> dict[str, int]:
-    """获取各微服务的 Python 进程内存
-    匹配: 按端口从 /proc/*/cmdline 中识别服务，再读 VmRSS
-    """
+    """获取各微服务的 Python 进程内存（跨平台，用 psutil）"""
+    import psutil as _psutil
+    port_to_name = {v: k for k, v in _SERVICE_PORTS.items()}
     mem_by_port: dict[int, int] = {}
     try:
-        pids = [p for p in os.listdir("/proc") if p.isdigit()]
-    except OSError:
-        return {}
-
-    for pid in pids:
-        try:
-            cmdline = open(f"/proc/{pid}/cmdline", "rb").read().decode("utf-8", errors="replace")
-        except OSError:
-            continue
-
-        # 找端口号
-        port = None
-        for token in cmdline.split("\0"):
-            t = token.strip()
-            if t.isdigit() and 9000 <= int(t) <= 9999:
-                port = int(t)
-                break
-
-        if port is None or port not in _SERVICE_PORTS.values():
-            continue
-
-        try:
-            for line in open(f"/proc/{pid}/status"):
-                if line.startswith("VmRSS:"):
-                    rss = int(line.split()[1])  # kB
-                    mem_by_port[port] = max(mem_by_port.get(port, 0), rss)
+        for proc in _psutil.process_iter(["pid", "cmdline"]):
+            try:
+                cmdline = proc.info.get("cmdline") or []
+            except (_psutil.NoSuchProcess, _psutil.AccessDenied):
+                continue
+            port = None
+            for token in cmdline:
+                t = token.strip()
+                if t.isdigit() and 9000 <= int(t) <= 9999:
+                    port = int(t)
                     break
-        except OSError:
-            continue
-
-    # 端口 → 服务名
-    port_to_name = {v: k for k, v in _SERVICE_PORTS.items()}
+            if port is None or port not in _SERVICE_PORTS.values():
+                continue
+            try:
+                rss = proc.memory_info().rss // 1024  # kB
+                mem_by_port[port] = max(mem_by_port.get(port, 0), rss)
+            except (_psutil.NoSuchProcess, _psutil.AccessDenied):
+                continue
+    except Exception as e:
+        logger.warning("获取进程内存失败: %s", e)
     result = {}
     for port, kb in mem_by_port.items():
         result[port_to_name.get(port, f"port_{port}")] = kb
