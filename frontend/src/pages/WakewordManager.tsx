@@ -203,21 +203,21 @@ export default function WakewordManager() {
       {configRow('调试阈值',
         <Slider min={0} max={1} step={0.05} value={debugThreshold} onChange={setDebugThresholdVal} style={SLIDER_STYLE} />,
         <InputNumber min={0} max={1} step={0.05} value={debugThreshold} onChange={(v) => setDebugThresholdVal(v || 0.5)} style={INPUT_STYLE} />,
-        <Button type="primary" size="small" onClick={handleDebugThresholdSave} style={BTN_STYLE}>保存</Button>,
+        <Button type="primary" size="small" onClick={async () => { try { await setDebugThreshold(debugThreshold); message.success('调试阈值已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
         '高于此值但低于检测阈值的唤醒词会保存音频供分析',
       )}
       {configRow('帧大小',
         <Slider min={800} max={16000} step={100} value={frameSamples} onChange={setFrameSamplesVal}
                 marks={{ 800: '800', 3200: '3200', 8000: '8000', 16000: '16000' }} style={SLIDER_STYLE} />,
         <InputNumber min={800} max={64000} step={100} value={frameSamples} onChange={(v) => setFrameSamplesVal(v || 3200)} style={INPUT_STYLE} />,
-        <Button type="primary" size="small" onClick={handleFrameSamplesSave} style={BTN_STYLE}>保存</Button>,
+        <Button type="primary" size="small" onClick={async () => { try { await setFrameSamples(frameSamples); message.success('帧大小已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
         frameSamples >= 16000 ? '1次/秒' : `${Math.round(16000 / frameSamples)}次/秒`,
       )}
       {configRow('静音判定(ms)',
         <Slider min={200} max={5000} step={100} value={vadSilence} onChange={setVadSilenceVal}
                 marks={{ 200: '200', 1600: '1600', 3000: '3000', 5000: '5000' }} style={SLIDER_STYLE} />,
         <InputNumber min={200} max={10000} step={100} value={vadSilence} onChange={(v) => setVadSilenceVal(v || 1600)} style={INPUT_STYLE} />,
-        <Button type="primary" size="small" onClick={handleVadSilenceSave} style={BTN_STYLE}>保存</Button>,
+        <Button type="primary" size="small" onClick={async () => { try { await setVadSilence(vadSilence); message.success('静音判定已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
       )}
 
       <audio ref={audioRef} onEnded={onAudioEnd} style={{ display: 'none' }} />
