@@ -345,7 +345,7 @@ async def package_wakeword():
         try:
             conn = sqlite3.connect(db_path)
             for row in conn.execute(
-                "SELECT file_path, category FROM wakeword_records WHERE category IN ('positive', 'negative')"
+                "SELECT file_path, category FROM wakeword_records"
             ).fetchall():
                 fp, cat = row
                 if not os.path.isabs(fp):
@@ -359,6 +359,6 @@ async def package_wakeword():
     zip_buffer.seek(0)
     logger.info("唤醒音频打包完成: %d 个文件", count)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return FileResponse(zip_buffer, media_type="application/zip",
-                        filename=f"wakeword_package_{ts}.zip",
-                        headers={"Content-Disposition": f'attachment; filename="wakeword_package_{ts}.zip"'})
+    from fastapi.responses import Response as _Resp
+    return _Resp(content=zip_buffer.getvalue(), media_type="application/zip",
+                 headers={"Content-Disposition": f'attachment; filename="wakeword_package_{ts}.zip"'})
