@@ -249,7 +249,7 @@ async def get_dashboard_stats():
 
 # ===================== 数据备份 =====================
 
-_BACKUP_EXCLUDE_DIRS = {"logs", "models"}
+_BACKUP_EXCLUDE_DIRS = {"models"}
 
 
 def _get_backup_path(filename: str) -> str:
@@ -274,7 +274,6 @@ async def create_backup():
                 rel = os.path.relpath(root, data_dir)
                 if rel == ".":
                     dirs[:] = [d for d in dirs if d not in _BACKUP_EXCLUDE_DIRS]
-                    continue
                 if rel.split(os.sep)[0] in _BACKUP_EXCLUDE_DIRS:
                     dirs[:] = []
                     continue
