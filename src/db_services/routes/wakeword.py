@@ -1,10 +1,7 @@
 """db_services — 唤醒词记录 + 阈值"""
 import os
 import glob
-import json
 import shutil
-import zipfile
-import io
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from typing import Optional
@@ -354,28 +351,3 @@ def delete_debug_audio(filename: str):
         raise HTTPException(404, "文件不存在")
     os.remove(filepath)
     return {"success": True}
-
-
-# ---- 打包 ----
-@router.get("/package")
-def package_wakeword():
-    import io
-    # 项目根目录，确保相对路径能正确解析
-    _root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        conn = db.get_connection()
-        for row in conn.execute(
-            "SELECT file_path, category FROM wakeword_records WHERE category IN ('positive', 'negative')"
-        ).fetchall():
-            fp = row["file_path"]
-            cat = row["category"]
-            if not os.path.isabs(fp):
-                fp = os.path.join(_root, fp)
-            if os.path.exists(fp):
-                zf.write(fp, f"{cat}/{os.path.basename(fp)}")
-    zip_buffer.seek(0)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    from fastapi.responses import Response as _Resp
-    return _Resp(content=zip_buffer.getvalue(), media_type="application/zip",
-                 headers={"Content-Disposition": f'attachment; filename="wakeword_package_{ts}.zip"'})

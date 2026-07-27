@@ -428,10 +428,6 @@ async def proxy_wakeword_debug_classify(filename: str, request: Request):
 async def proxy_wakeword_debug_delete(filename: str, request: Request):
     return await _proxy_to_db(f"/api/wakeword/debug/{filename}", request)
 
-@app.api_route("/api/admin/wakeword/package", methods=["GET"])
-async def proxy_wakeword_package(request: Request):
-    return await _proxy_to_db("/api/wakeword/package", request)
-
 @app.api_route("/api/admin/wakeword/frame-samples", methods=["GET", "PUT"])
 async def proxy_wakeword_frame_samples(request: Request):
     return await _proxy_to_db("/api/wakeword/frame-samples", request)

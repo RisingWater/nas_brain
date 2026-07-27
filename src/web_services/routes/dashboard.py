@@ -331,3 +331,34 @@ async def delete_backup(filename: str):
         return {"success": True, "filename": safe_name}
     except Exception as e:
         raise HTTPException(500, f"删除失败: {e}")
+
+
+@router.get("/wakeword/package")
+async def package_wakeword():
+    """打包正向+负向唤醒音频为 zip（用于训练）"""
+    import zipfile, io, sqlite3
+    _root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    db_path = os.getenv("DB_PATH", os.path.join(_root, "data", "nas_brain.db"))
+    zip_buffer = io.BytesIO()
+    count = 0
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        try:
+            conn = sqlite3.connect(db_path)
+            for row in conn.execute(
+                "SELECT file_path, category FROM wakeword_records WHERE category IN ('positive', 'negative')"
+            ).fetchall():
+                fp, cat = row
+                if not os.path.isabs(fp):
+                    fp = os.path.join(_root, fp)
+                if os.path.exists(fp):
+                    zf.write(fp, f"{cat}/{os.path.basename(fp)}")
+                    count += 1
+            conn.close()
+        except Exception as e:
+            logger.warning("打包唤醒音频失败: %s", e)
+    zip_buffer.seek(0)
+    logger.info("唤醒音频打包完成: %d 个文件", count)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return FileResponse(zip_buffer, media_type="application/zip",
+                        filename=f"wakeword_package_{ts}.zip",
+                        headers={"Content-Disposition": f'attachment; filename="wakeword_package_{ts}.zip"'})
