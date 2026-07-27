@@ -144,7 +144,7 @@ class LLMHandler:
                     messages.append(assistant_response)
                     has_final = True
                     final_text = result_text
-                    break  # 跳出工具循环（不继续执行后面的工具）
+                    continue  # 不送 LLM，但后续工具仍要执行完
 
                 # 非 final 工具：将结果加入上下文，继续 LLM 循环
                 messages.append({
