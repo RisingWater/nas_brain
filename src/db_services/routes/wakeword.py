@@ -360,14 +360,20 @@ def delete_debug_audio(filename: str):
 @router.get("/package")
 def package_wakeword():
     import io
+    # 项目根目录，确保相对路径能正确解析
+    _root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         conn = db.get_connection()
         for row in conn.execute(
-            "SELECT file_path, category FROM wakeword_records WHERE category IN ('positive', 'negative')"
+            "SELECT file_path, category FROM wakeword_records"
         ).fetchall():
-            if os.path.exists(row["file_path"]):
-                zf.write(row["file_path"], f"{row['category']}/{os.path.basename(row['file_path'])}")
+            fp = row["file_path"]
+            cat = row["category"]
+            if not os.path.isabs(fp):
+                fp = os.path.join(_root, fp)
+            if os.path.exists(fp):
+                zf.write(fp, f"{cat}/{os.path.basename(fp)}")
     zip_buffer.seek(0)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     from fastapi.responses import Response as _Resp
