@@ -370,5 +370,6 @@ def package_wakeword():
                 zf.write(row["file_path"], f"{row['category']}/{os.path.basename(row['file_path'])}")
     zip_buffer.seek(0)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return FileResponse(zip_buffer, media_type="application/zip",
-                        headers={"Content-Disposition": f'attachment; filename="wakeword_package_{ts}.zip"'})
+    from fastapi.responses import Response as _Resp
+    return _Resp(content=zip_buffer.getvalue(), media_type="application/zip",
+                 headers={"Content-Disposition": f'attachment; filename="wakeword_package_{ts}.zip"'})
