@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, time as dt_time
 from email.utils import parsedate_to_datetime
