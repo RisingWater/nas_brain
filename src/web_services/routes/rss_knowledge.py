@@ -3,6 +3,7 @@ import json
 import os
 import glob
 import logging
+from datetime import datetime
 from fastapi import APIRouter, Query
 from typing import Optional
 
@@ -46,11 +47,10 @@ def get_rss_knowledge(
     def _sort_key(item):
         try:
             from email.utils import parsedate_to_datetime
-            return parsedate_to_datetime(item.get("pubDate", "")) or datetime.min
+            pd = item.get("pubDate", "")
+            return parsedate_to_datetime(pd) or datetime.min
         except Exception:
             return datetime.min
-
-    from datetime import datetime as _dt
     all_items.sort(key=_sort_key, reverse=True)
 
     total = len(all_items)
