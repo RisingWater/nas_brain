@@ -157,7 +157,7 @@ async def _proxy_to_playback(path: str, request: Request) -> JSONResponse:
             _req.request, request.method, url, data=body, headers=headers, timeout=30,
         )
         content_type = resp.headers.get("content-type", "")
-        if "audio/" in content_type:
+        if "audio/" in content_type or "application/zip" in content_type:
             from fastapi.responses import Response
             return Response(content=resp.content, media_type=content_type,
                             headers=dict(resp.headers))
@@ -297,7 +297,7 @@ async def _proxy_to_db(path: str, request: Request) -> JSONResponse:
             _req.request, request.method, url, data=body, headers=headers, timeout=15,
         )
         content_type = resp.headers.get("content-type", "")
-        if "audio/" in content_type:
+        if "audio/" in content_type or "application/zip" in content_type:
             from fastapi.responses import Response
             return Response(content=resp.content, media_type=content_type,
                             headers=dict(resp.headers))
