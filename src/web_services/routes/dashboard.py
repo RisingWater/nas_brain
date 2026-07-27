@@ -334,24 +334,46 @@ async def delete_backup(filename: str):
 
 @router.get("/wakeword/package")
 async def package_wakeword():
-    """打包正向+负向唤醒音频为 zip（用于训练）"""
-    import zipfile, io, sqlite3
+    """打包唤醒音频为 zip（用于训练）"""
+    import zipfile, io, sqlite3, tempfile, shutil
+    from fastapi import BackgroundTasks
     _root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
     db_path = os.getenv("DB_PATH", os.path.join(_root, "data", "nas_brain.db"))
-    zip_buffer = io.BytesIO()
+    # 临时目录：存放按分类整理的 wav
+    tmpdir = tempfile.mkdtemp()
     count = 0
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        try:
-            conn = sqlite3.connect(db_path)
-            for row in conn.execute(
-                "SELECT file_path, category FROM wakeword_records"
-            ).fetchall():
-                fp, cat = row
-                if not os.path.isabs(fp):
-                    fp = os.path.join(_root, fp)
-                if os.path.exists(fp):
-                    zf.write(fp, f"{cat}/{os.path.basename(fp)}")
-                    count += 1
+    try:
+        conn = sqlite3.connect(db_path)
+        for row in conn.execute("SELECT file_path, category FROM wakeword_records").fetchall():
+            fp, cat = row
+            if not os.path.isabs(fp):
+                fp = os.path.join(_root, fp)
+            if os.path.exists(fp):
+                cat_dir = os.path.join(tmpdir, cat)
+                os.makedirs(cat_dir, exist_ok=True)
+                shutil.copy2(fp, os.path.join(cat_dir, os.path.basename(fp)))
+                count += 1
+        conn.close()
+        # 打包到临时 zip 文件
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        zip_filename = f"wakeword_package_{ts}.zip"
+        zip_path = os.path.join(tmpdir, zip_filename)
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for dirpath, _, filenames in os.walk(tmpdir):
+                for f in filenames:
+                    if f == zip_filename:
+                        continue
+                    fp = os.path.join(dirpath, f)
+                    zf.write(fp, os.path.relpath(fp, tmpdir))
+        logger.info("唤醒音频打包完成: %d 个文件", count)
+        # 清理任务（下载完成后删除临时目录）
+        tasks = BackgroundTasks()
+        tasks.add_task(shutil.rmtree, tmpdir, ignore_errors=True)
+        return FileResponse(zip_path, media_type="application/zip", filename=zip_filename,
+                            background=tasks)
+    except Exception as e:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise HTTPException(500, f"打包失败: {e}")
             conn.close()
         except Exception as e:
             logger.warning("打包唤醒音频失败: %s", e)
