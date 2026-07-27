@@ -124,7 +124,7 @@ export default function Dashboard() {
       {/* ===== 三个饼图一行 ===== */}
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={24} md={8}>
-          <Card size="small" title={<span><PieChartOutlined /> 存储</span>}>
+          <Card size="small" title={<span><PieChartOutlined /> 存储</span>} style={{ height: '100%' }}>
             <div style={{ textAlign: 'center' }}>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
@@ -151,7 +151,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card size="small" title={<span><PieChartOutlined /> 内存</span>}>
+          <Card size="small" title={<span><PieChartOutlined /> 内存</span>} style={{ height: '100%' }}>
             <div style={{ textAlign: 'center' }}>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
@@ -178,7 +178,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card size="small" title={<span><ThunderboltOutlined /> CPU</span>}>
+          <Card size="small" title={<span><ThunderboltOutlined /> CPU</span>} style={{ height: '100%' }}>
             <div style={{ textAlign: 'center' }}>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
