@@ -25,9 +25,9 @@ const categoryLabels: Record<string, string> = {
   positive: 'Positive', negative: 'Negative', unclassified: '未分类',
 };
 
-const SLIDER_STYLE: React.CSSProperties = { width: 240 };
-const INPUT_STYLE: React.CSSProperties = { width: 80 };
-const BTN_STYLE: React.CSSProperties = { width: 100 };
+const SLIDER_STYLE: React.CSSProperties = { width: 320 };
+const INPUT_STYLE: React.CSSProperties = { width: 90 };
+const BTN_STYLE: React.CSSProperties = { width: 100, height: 32 };
 
 export default function WakewordManager() {
   const [threshold, setThresholdVal] = useState(0.7);
@@ -182,12 +182,12 @@ export default function WakewordManager() {
 
   // ---- 渲染配置行 ----
   const configRow = (label: string, slider: JSX.Element, input: JSX.Element, btn: JSX.Element, tooltip?: string) => (
-    <Row gutter={8} align="middle" style={{ marginBottom: 12 }}>
-      <Col style={{ width: 140, textAlign: 'right', paddingRight: 8 }}>
+    <Row gutter={12} align="middle" style={{ marginBottom: 12 }}>
+      <Col style={{ width: 120, textAlign: 'left' }}>
         {tooltip ? <Tooltip title={tooltip}><Text strong>{label}</Text></Tooltip> : <Text strong>{label}</Text>}
       </Col>
-      <Col flex="auto" style={{ maxWidth: 260 }}>{slider}</Col>
-      <Col style={{ width: 100 }}>{input}</Col>
+      <Col flex="auto" style={{ maxWidth: 340 }}>{slider}</Col>
+      <Col style={{ width: 100, marginLeft: 16 }}>{input}</Col>
       <Col style={{ width: 110 }}>{btn}</Col>
     </Row>
   );
@@ -198,26 +198,26 @@ export default function WakewordManager() {
       {configRow('检测阈值',
         <Slider min={0} max={1} step={0.05} value={threshold} onChange={setThresholdVal} style={SLIDER_STYLE} />,
         <InputNumber min={0} max={1} step={0.05} value={threshold} onChange={(v) => setThresholdVal(v || 0.7)} style={INPUT_STYLE} />,
-        <Button type="primary" size="small" onClick={async () => { try { await setThreshold(threshold); message.success('已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
+        <Button type="primary" onClick={async () => { try { await setThreshold(threshold); message.success('已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
       )}
       {configRow('调试阈值',
         <Slider min={0} max={1} step={0.05} value={debugThreshold} onChange={setDebugThresholdVal} style={SLIDER_STYLE} />,
         <InputNumber min={0} max={1} step={0.05} value={debugThreshold} onChange={(v) => setDebugThresholdVal(v || 0.5)} style={INPUT_STYLE} />,
-        <Button type="primary" size="small" onClick={async () => { try { await setDebugThreshold(debugThreshold); message.success('调试阈值已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
+        <Button type="primary" onClick={async () => { try { await setDebugThreshold(debugThreshold); message.success('调试阈值已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
         '高于此值但低于检测阈值的唤醒词会保存音频供分析',
       )}
       {configRow('帧大小',
         <Slider min={800} max={16000} step={100} value={frameSamples} onChange={setFrameSamplesVal}
                 marks={{ 800: '800', 3200: '3200', 8000: '8000', 16000: '16000' }} style={SLIDER_STYLE} />,
         <InputNumber min={800} max={64000} step={100} value={frameSamples} onChange={(v) => setFrameSamplesVal(v || 3200)} style={INPUT_STYLE} />,
-        <Button type="primary" size="small" onClick={async () => { try { await setFrameSamples(frameSamples); message.success('帧大小已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
+        <Button type="primary" onClick={async () => { try { await setFrameSamples(frameSamples); message.success('帧大小已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
         frameSamples >= 16000 ? '1次/秒' : `${Math.round(16000 / frameSamples)}次/秒`,
       )}
       {configRow('静音判定(ms)',
         <Slider min={200} max={5000} step={100} value={vadSilence} onChange={setVadSilenceVal}
                 marks={{ 200: '200', 1600: '1600', 3000: '3000', 5000: '5000' }} style={SLIDER_STYLE} />,
         <InputNumber min={200} max={10000} step={100} value={vadSilence} onChange={(v) => setVadSilenceVal(v || 1600)} style={INPUT_STYLE} />,
-        <Button type="primary" size="small" onClick={async () => { try { await setVadSilence(vadSilence); message.success('静音判定已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
+        <Button type="primary" onClick={async () => { try { await setVadSilence(vadSilence); message.success('静音判定已保存'); } catch { message.error('保存失败'); } }} style={BTN_STYLE}>保存</Button>,
       )}
 
       <audio ref={audioRef} onEnded={onAudioEnd} style={{ display: 'none' }} />
