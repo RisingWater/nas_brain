@@ -170,6 +170,16 @@ def get_max_message_id(user_id: str):
     return {"user_id": user_id, "max_id": row["max_id"] or 0}
 
 
+@router.put("/{msg_id}/content")
+def update_message_content(msg_id: int, body: dict):
+    """更新单条消息的内容"""
+    content = body.get("content", "")
+    conn = db.get_connection()
+    conn.execute("UPDATE chat_messages SET content = ? WHERE id = ?", (content, msg_id))
+    conn.commit()
+    return {"success": True, "updated_id": msg_id}
+
+
 @router.delete("/single/{msg_id}")
 def delete_message_by_id(msg_id: int):
     """按 ID 删除单条消息"""

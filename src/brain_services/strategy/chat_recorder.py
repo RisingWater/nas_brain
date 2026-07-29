@@ -54,6 +54,15 @@ class ChatRecorder:
             logger.error("记录聊天消息失败: %s", e)
             return None
 
+    def update_content(self, msg_id: int, content: str) -> bool:
+        """更新已记录消息的 content（如 OCR 后补充识别结果）"""
+        try:
+            resp = requests.put(self._url(f"/{msg_id}/content"), json={"content": content}, timeout=10)
+            return resp.status_code == 200
+        except Exception as e:
+            logger.error("更新消息内容失败 msg_id=%s: %s", msg_id, e)
+            return False
+
     def record_batch(self, messages: list[dict]) -> list[int] | None:
         """批量写入聊天记录"""
         try:

@@ -119,8 +119,8 @@ class StrategyEngine:
             if config.get("ocr_image"):
                 ocr_text = self._ocr_image(req)
                 if ocr_text:
-                    req.content = f"{req.content or ''}\n【OCR识别结果】\n{ocr_text}"
-                    self.recorder.record_user_message(req)
+                    updated = f"{req.content or ''}\n【OCR识别结果】\n{ocr_text}"
+                    self.recorder.update_content(user_msg_id, updated)
                     logger.info("图片 OCR 完成，跳过回复: %.50s", ocr_text)
                     return AgentResponse(data={
                         "request_id": req.request_id,
