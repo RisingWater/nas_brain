@@ -84,7 +84,7 @@ class StrategyEngine:
                 "skipped": True,
             })
 
-        # 3. Ignore 策略：只记录不处理
+        # 3. 获取策略（voice 强制 smart）
         strategy = self.get_strategy(req, config)
         if strategy == "ignore":
             logger.info("Ignore 策略，跳过处理: %.50s", req.content or "")
@@ -94,7 +94,23 @@ class StrategyEngine:
                 "ignored": True,
             })
 
-        # 5. 尝试 processors
+        # 4. 按策略分流：smart → LLM，direct → processor
+        if strategy == "smart":
+            # Smart + IMAGE：OCR 识别，存历史，不回复
+            if req.content_type == ContentType.IMAGE and req.file_id and config.get("ocr_image"):
+                ocr_text = self._ocr_image(req)
+                if ocr_text:
+                    updated = f"{req.content or ''}\n【OCR识别结果】\n{ocr_text}"
+                    self.recorder.update_content(user_msg_id, updated)
+                    logger.info("图片 OCR 完成，跳过回复: %.50s", ocr_text)
+                    return AgentResponse(data={
+                        "request_id": req.request_id,
+                        "text": "",
+                        "skipped": True,
+                    })
+            return self._process_smart(req, config, user_msg_id)
+
+        # direct：processor 优先，无命中则简单兜底
         processor, ctx = proc_registry.find_handler(req)
         if processor:
             logger.info("Processor %s 处理请求", processor.name)
@@ -107,32 +123,12 @@ class StrategyEngine:
                         "text": result["reply"],
                         "processor": processor.name,
                     }
-                    # 透传文件路径（由 agent route 统一发送到微信）
                     if "files" in result:
                         resp_data["files"] = result["files"]
                     return AgentResponse(data=resp_data)
             except Exception as e:
                 logger.error("Processor %s 异常: %s", processor.name, e, exc_info=True)
-
-        # 4. Smart + IMAGE：OCR 识别，跳过 processor 和 LLM
-        if strategy == "smart" and req.content_type == ContentType.IMAGE and req.file_id:
-            if config.get("ocr_image"):
-                ocr_text = self._ocr_image(req)
-                if ocr_text:
-                    updated = f"{req.content or ''}\n【OCR识别结果】\n{ocr_text}"
-                    self.recorder.update_content(user_msg_id, updated)
-                    logger.info("图片 OCR 完成，跳过回复: %.50s", ocr_text)
-                    return AgentResponse(data={
-                        "request_id": req.request_id,
-                        "text": "",
-                        "skipped": True,
-                    })
-
-        # 5. 尝试 processors
-        if strategy == "smart":
-            return self._process_smart(req, config, user_msg_id)
-        else:
-            return self._process_direct(req)
+        return self._process_direct(req)
 
     def _process_smart(self, req: AgentRequest, config: dict, user_msg_id: int | None = None) -> AgentResponse:
         """Smart 模式：LLM + 工具调用"""
