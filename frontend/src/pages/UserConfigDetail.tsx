@@ -57,6 +57,7 @@ export default function UserConfigDetail() {
           allowed_processors: config.allowed_processors || [],
           short_term_window: config.short_term_window,
           group_at_only: config.group_at_only,
+          ocr_image: config.ocr_image ?? false,
           ice_breaker_enabled: config.ice_breaker_enabled,
           ice_breaker_prompt: config.ice_breaker_prompt || '',
           ice_breaker_trigger_minutes: config.ice_breaker_trigger_minutes ?? 15,
@@ -85,6 +86,7 @@ export default function UserConfigDetail() {
         allowed_processors: values.strategy === 'direct' ? (values.allowed_processors?.length ? values.allowed_processors : null) : null,
         short_term_window: values.short_term_window,
         group_at_only: userInfo?.user_type === 'group' ? values.group_at_only : undefined,
+        ocr_image: values.ocr_image,
         ...(hasWechat ? {
           ice_breaker_enabled: values.ice_breaker_enabled,
           ice_breaker_prompt: values.ice_breaker_prompt || '',
@@ -200,6 +202,11 @@ export default function UserConfigDetail() {
 
       <Form.Item name="short_term_window" label="短期记忆窗口（分钟）" rules={[{ required: true }]}>
         <InputNumber min={5} max={1440} style={{ width: 200 }} />
+      </Form.Item>
+
+      <Form.Item name="ocr_image" label="图片自动 OCR 识别" valuePropName="checked"
+                 tooltip="收到图片时自动识别其中的文字，结果补充到消息内容中">
+        <Switch />
       </Form.Item>
     </>
   );
