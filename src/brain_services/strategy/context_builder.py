@@ -99,6 +99,9 @@ class LLMContextBuilder:
         for msg in short_term:
             messages.append(msg)
 
+        # 清理短期记忆中孤立的 tool_calls（final 工具打断链路的场景）
+        self._cleanup_orphan_tool_calls(messages)
+
         # 5. Current user message
         msg_content = current_msg
         if sender and chat_type == "group":
@@ -203,3 +206,25 @@ class LLMContextBuilder:
         except Exception as e:
             logger.error("获取短期记忆失败: %s", e)
         return []
+
+    @staticmethod
+    def _cleanup_orphan_tool_calls(messages: list[dict]):
+        """移除没有对应 tool 响应的 tool_calls 消息"""
+        i = 0
+        while i < len(messages):
+            msg = messages[i]
+            if isinstance(msg, dict) and msg.get("tool_calls"):
+                tc_ids = {tc["id"] for tc in msg["tool_calls"]}
+                j = i + 1
+                while j < len(messages):
+                    nxt = messages[j]
+                    if isinstance(nxt, dict) and nxt.get("role") == "tool":
+                        tc_ids.discard(nxt.get("tool_call_id", ""))
+                        j += 1
+                    else:
+                        break
+                if tc_ids:
+                    logger.debug("上下文清理孤立 tool_calls: %s", tc_ids)
+                    messages.pop(i)
+                    continue
+            i += 1
