@@ -82,9 +82,9 @@ class LLMHandler:
             messages.append(assistant_msg)
 
             has_final = False
-            final_text = ""
+            final_texts = []
+            final_tool_responses = []
 
-            # 状态：操作中（有工具调用）
             # 逐个执行工具
             for tc in tool_calls:
                 if tc.get("type") != "function":
@@ -92,12 +92,10 @@ class LLMHandler:
                 func = tc.get("function", {})
                 tool_name = func.get("name", "")
 
-                # 状态：操作中
                 tool_obj = tool_registry.get(tool_name)
                 disp_name = tool_obj.display_name if tool_obj else tool_name
                 ai_status.set("operating", message=f"正在调用 {disp_name}")
 
-                # 追踪：工具调用开始
                 if request_id:
                     _trace_event(request_id, "tool_call", metadata={"tool": tool_name})
 
@@ -115,53 +113,44 @@ class LLMHandler:
                 result_text = result.get("text", "（无返回）")
                 logger.info("工具 %s 返回: %.100s", tool_name, result_text)
 
-                # 追踪：工具返回
                 if request_id:
                     _trace_event(request_id, "tool_result", metadata={"tool": tool_name})
 
-                # 收集附件文件
                 files = result.get("files", [])
                 if files:
                     all_files.extend(files)
 
-                # 记录工具结果到 DB（含原始 tool_call_id）
                 self.recorder.record_tool_result(user_id, tool_name, result,
                                                   tool_call_id=str(tc.get("id", "")))
 
-                # 检查是否为 final 工具
                 tool_obj = tool_registry.get(tool_name)
                 if tool_obj and tool_obj.final:
-                    # final 工具：不送回 LLM，直接返回结果
-                    # 真正的工具调用结果已经由 record_tool_result 记录到 DB
-                    # 在内存中加入 tool 响应和 assistant 响应，保证上下文链完整
-                    tool_response = {"role": "tool", "tool_call_id": str(tc.get("id", "")),
-                                     "content": json.dumps(result, ensure_ascii=False)}
-                    assistant_response = {"role": "assistant", "content": result_text}
-                    # DB：记录 assistant 响应
-                    self.recorder.record_assistant(user_id, result_text)
-                    # 内存
-                    messages.append(tool_response)
-                    messages.append(assistant_response)
+                    final_tool_responses.append({
+                        "role": "tool", "tool_call_id": str(tc.get("id", "")),
+                        "content": json.dumps(result, ensure_ascii=False),
+                    })
+                    final_texts.append(result_text)
                     has_final = True
-                    final_text = result_text
-                    continue  # 不送 LLM，但后续工具仍要执行完
+                    continue
 
-                # 非 final 工具：将结果加入上下文，继续 LLM 循环
                 messages.append({
                     "role": "tool",
                     "tool_call_id": str(tc.get("id", "")),
                     "content": json.dumps(result, ensure_ascii=False),
                 })
 
-            # 工具执行完毕，回到思考状态
-            if not has_final:
-                ai_status.set("thinking", message="正在准备答复措辞")
-
             if has_final:
-                # 清理上下文中孤立的 tool_calls（final 工具不会添加 tool response）
-                # 避免下次构建上下文时 DeepSeek 报错
-                self._cleanup_orphan_tool_calls(messages)
-                return final_text, all_files, {"prompt_tokens": req_prompt, "completion_tokens": req_completion}
+                # 所有 final 工具执行完毕：合并成一条 assistant 回复
+                combined = "\n".join(final_texts) if len(final_texts) > 1 else (final_texts[0] if final_texts else "")
+                for tr in final_tool_responses:
+                    messages.append(tr)
+                if combined:
+                    self.recorder.record_assistant(user_id, combined)
+                    messages.append({"role": "assistant", "content": combined})
+                return combined, all_files, {"prompt_tokens": req_prompt, "completion_tokens": req_completion}
+
+            # 非 final 工具，继续 LLM 循环
+            ai_status.set("thinking", message="正在准备答复措辞")
 
         logger.warning("LLM 工具调用达到最大迭代次数 %d", self.MAX_ITERATIONS)
         return "（工具调用次数过多，请简化问题）", all_files, {"prompt_tokens": req_prompt, "completion_tokens": req_completion}
