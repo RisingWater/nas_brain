@@ -10,7 +10,7 @@ import logging
 import threading
 from fastapi import APIRouter, BackgroundTasks
 from ..schema.brain_schema import AgentResponse
-from src.common.schemas.agent_request import AgentRequest, ProtocolType
+from src.common.schemas.agent_request import AgentRequest, ContentType, ProtocolType
 from ..strategy import strategy_engine
 from ..stats import stats
 from ..status import ai_status
