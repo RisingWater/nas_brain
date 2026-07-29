@@ -1,5 +1,6 @@
 """策略引擎 — 消息分流 + smart/direct 处理"""
 import os
+import random
 import logging
 import requests
 from src.common.utils import cfg
@@ -182,6 +183,17 @@ class StrategyEngine:
                 "skipped": True,
             })
 
+        # 表情包：微信 smart 模式下，按概率附带一张梗图
+        if reply and reply.strip() not in ("__SKIP__", "") and config.get("send_bqb"):
+            if req.protocol == ProtocolType.WECHAT and random.randint(1, 100) <= config.get("bqb_probability", 50):
+                bqb_path = self._attach_bqb(reply)
+                if bqb_path:
+                    if files is None:
+                        files = []
+                    elif isinstance(files, tuple):
+                        files = list(files)
+                    files.append(bqb_path)
+
         return AgentResponse(data={
             "request_id": req.request_id,
             "text": reply or "（无回复）",
@@ -235,3 +247,22 @@ class StrategyEngine:
             return None
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def _attach_bqb(self, reply: str) -> str | None:
+        """根据回复内容生成表情包关键字并搜索下载，返回本地路径"""
+        try:
+            from src.common.clients.deepseek import DeepSeekAPI
+            deepseek = DeepSeekAPI()
+            kw = deepseek.ask_single_question(
+                f"根据以下回复内容，生成一个2-8个字的表情包搜索关键词，只返回关键词不要其他文字：\n{reply[:200]}"
+            )
+            kw = (kw or "").strip().strip('"').strip("'")
+            if not kw or len(kw) < 2 or len(kw) > 8:
+                logger.warning("BQB 关键词无效: %s", kw)
+                return None
+            logger.info("BQB 关键词: %s ← %s", kw, reply[:30])
+            from src.common.lib.bqb_generator import get_random_bqb
+            return get_random_bqb(kw)
+        except Exception as e:
+            logger.warning("BQB 生成失败: %s", e)
+            return None

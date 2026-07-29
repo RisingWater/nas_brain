@@ -11,6 +11,8 @@ export interface UserConfig {
   created_at: string | null;
   updated_at: string | null;
   ocr_image: boolean;
+  send_bqb: boolean;
+  bqb_probability: number;
   ice_breaker_enabled: boolean;
   ice_breaker_prompt: string;
   ice_breaker_trigger_minutes: number;
@@ -27,6 +29,8 @@ export interface UserConfigUpdate {
   short_term_window?: number;
   group_at_only?: boolean;
   ocr_image?: boolean;
+  send_bqb?: boolean;
+  bqb_probability?: number;
   ice_breaker_enabled?: boolean;
   ice_breaker_prompt?: string;
   ice_breaker_trigger_minutes?: number;

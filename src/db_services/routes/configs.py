@@ -16,6 +16,8 @@ _DEFAULT = {
     "short_term_window": 30,
     "group_at_only": True,
     "ocr_image": False,
+    "send_bqb": False,
+    "bqb_probability": 50,
     "ice_breaker_enabled": False,
     "ice_breaker_prompt": "",
     "ice_breaker_trigger_minutes": 15,
@@ -53,6 +55,17 @@ def _init_table():
         conn.commit()
     except Exception:
         pass
+    # 兼容：添加表情包列
+    try:
+        conn.execute("ALTER TABLE user_configs ADD COLUMN send_bqb INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        conn.execute("ALTER TABLE user_configs ADD COLUMN bqb_probability INTEGER DEFAULT 50")
+        conn.commit()
+    except Exception:
+        pass
     # 兼容：添加冰点配置列
     for col, dtype in [
         ("ice_breaker_enabled", "INTEGER DEFAULT 0"),
@@ -85,6 +98,8 @@ def _row_to_dict(row) -> dict:
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "ocr_image": bool(row["ocr_image"]) if row["ocr_image"] is not None else False,
+        "send_bqb": bool(row["send_bqb"]) if row["send_bqb"] is not None else False,
+        "bqb_probability": row["bqb_probability"] or 50,
         "ice_breaker_enabled": bool(row["ice_breaker_enabled"]) if row["ice_breaker_enabled"] is not None else False,
         "ice_breaker_prompt": row["ice_breaker_prompt"] or "",
         "ice_breaker_trigger_minutes": row["ice_breaker_trigger_minutes"] or 15,
@@ -165,6 +180,12 @@ def update_user_config(user_id: str, req: UserConfigUpdateRequest):
     if req.ocr_image is not None:
         fields.append("ocr_image = ?")
         values.append(1 if req.ocr_image else 0)
+    if req.send_bqb is not None:
+        fields.append("send_bqb = ?")
+        values.append(1 if req.send_bqb else 0)
+    if req.bqb_probability is not None:
+        fields.append("bqb_probability = ?")
+        values.append(req.bqb_probability)
     if req.ice_breaker_enabled is not None:
         fields.append("ice_breaker_enabled = ?")
         values.append(1 if req.ice_breaker_enabled else 0)
@@ -210,6 +231,11 @@ def update_user_config(user_id: str, req: UserConfigUpdateRequest):
         # OCR 字段
         if hasattr(req, "ocr_image") and req.ocr_image is not None:
             defaults["ocr_image"] = 1 if req.ocr_image else 0
+        # 表情包字段
+        if hasattr(req, "send_bqb") and req.send_bqb is not None:
+            defaults["send_bqb"] = 1 if req.send_bqb else 0
+        if hasattr(req, "bqb_probability") and req.bqb_probability is not None:
+            defaults["bqb_probability"] = req.bqb_probability
         # 冰点字段
         for k in ("ice_breaker_enabled", "ice_breaker_prompt", "ice_breaker_trigger_minutes",
                   "ice_breaker_cooldown_minutes", "ice_breaker_sleep_start", "ice_breaker_sleep_end"):
@@ -218,13 +244,16 @@ def update_user_config(user_id: str, req: UserConfigUpdateRequest):
         conn.execute(
             """INSERT INTO user_configs (user_id, strategy, system_prompt, allowed_tools,
                allowed_processors, short_term_window, group_at_only, ocr_image,
+               send_bqb, bqb_probability,
                ice_breaker_enabled, ice_breaker_prompt, ice_breaker_trigger_minutes,
                ice_breaker_cooldown_minutes, ice_breaker_sleep_start, ice_breaker_sleep_end)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (user_id, defaults["strategy"], defaults["system_prompt"],
              defaults["allowed_tools"], defaults["allowed_processors"],
              defaults["short_term_window"], defaults["group_at_only"],
              1 if defaults["ocr_image"] else 0,
+             1 if defaults["send_bqb"] else 0,
+             defaults["bqb_probability"],
              1 if defaults["ice_breaker_enabled"] else 0,
              defaults["ice_breaker_prompt"], defaults["ice_breaker_trigger_minutes"],
              defaults["ice_breaker_cooldown_minutes"],

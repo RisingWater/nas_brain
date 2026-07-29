@@ -12,6 +12,9 @@ class UserConfigUpdateRequest(BaseModel):
     group_at_only: Optional[bool] = None
     # OCR
     ocr_image: Optional[bool] = None
+    # 表情包
+    send_bqb: Optional[bool] = None
+    bqb_probability: Optional[int] = Field(None, ge=1, le=100)
     # 冰点（主动发言）
     ice_breaker_enabled: Optional[bool] = None
     ice_breaker_prompt: Optional[str] = None
@@ -33,6 +36,9 @@ class UserConfigResponse(BaseModel):
     updated_at: Optional[str] = None
     # OCR
     ocr_image: bool = False
+    # 表情包
+    send_bqb: bool = False
+    bqb_probability: int = 50
     # 冰点
     ice_breaker_enabled: bool = False
     ice_breaker_prompt: str = ""

@@ -58,6 +58,8 @@ export default function UserConfigDetail() {
           short_term_window: config.short_term_window,
           group_at_only: config.group_at_only,
           ocr_image: config.ocr_image ?? false,
+          send_bqb: config.send_bqb ?? false,
+          bqb_probability: config.bqb_probability ?? 50,
           ice_breaker_enabled: config.ice_breaker_enabled,
           ice_breaker_prompt: config.ice_breaker_prompt || '',
           ice_breaker_trigger_minutes: config.ice_breaker_trigger_minutes ?? 15,
@@ -87,6 +89,8 @@ export default function UserConfigDetail() {
         short_term_window: values.short_term_window,
         group_at_only: userInfo?.user_type === 'group' ? values.group_at_only : undefined,
         ocr_image: values.ocr_image,
+        send_bqb: values.send_bqb,
+        bqb_probability: values.bqb_probability,
         ...(hasWechat ? {
           ice_breaker_enabled: values.ice_breaker_enabled,
           ice_breaker_prompt: values.ice_breaker_prompt || '',
@@ -207,6 +211,22 @@ export default function UserConfigDetail() {
       <Form.Item name="ocr_image" label="图片自动 OCR 识别" valuePropName="checked"
                  tooltip="收到图片时自动识别其中的文字，结果补充到消息内容中">
         <Switch />
+      </Form.Item>
+
+      <Form.Item name="send_bqb" label="发送表情包" valuePropName="checked"
+                 tooltip="回复时按概率附带一张相关表情包图片">
+        <Switch />
+      </Form.Item>
+      <Form.Item noStyle shouldUpdate={(prev, cur) => prev.send_bqb !== cur.send_bqb}>
+        {({ getFieldValue }) => {
+          if (!getFieldValue('send_bqb')) return null;
+          return (
+            <Form.Item name="bqb_probability" label="表情包概率（%）"
+                       tooltip="每次回复时附带表情包的概率百分比">
+              <InputNumber min={1} max={100} style={{ width: 120 }} />
+            </Form.Item>
+          );
+        }}
       </Form.Item>
     </>
   );
