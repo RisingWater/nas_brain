@@ -94,7 +94,7 @@ class StrategyEngine:
                 "ignored": True,
             })
 
-        # 4. 先尝试 processors
+        # 5. 尝试 processors
         processor, ctx = proc_registry.find_handler(req)
         if processor:
             logger.info("Processor %s 处理请求", processor.name)
@@ -114,7 +114,7 @@ class StrategyEngine:
             except Exception as e:
                 logger.error("Processor %s 异常: %s", processor.name, e, exc_info=True)
 
-        # 4b. Smart + IMAGE：自动 OCR 识别图片文字，不回复，存历史供后续追问
+        # 4. Smart + IMAGE：OCR 识别，跳过 processor 和 LLM
         if strategy == "smart" and req.content_type == ContentType.IMAGE and req.file_id:
             if config.get("ocr_image"):
                 ocr_text = self._ocr_image(req)
@@ -128,7 +128,7 @@ class StrategyEngine:
                         "skipped": True,
                     })
 
-        # 5. 按策略分流
+        # 5. 尝试 processors
         if strategy == "smart":
             return self._process_smart(req, config, user_msg_id)
         else:
