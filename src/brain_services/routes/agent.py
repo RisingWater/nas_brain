@@ -159,6 +159,7 @@ def _process_async(req: AgentRequest):
                     user_id=req.user_id, metadata={"content": req.content or ""})
 
         # IMAGE 类型：检查用户配置是否开启 OCR，开启则自动识别图片文字
+        ocr_skipped = False
         if req.content_type == ContentType.IMAGE and req.file_id:
             try:
                 import requests as _r2
@@ -167,8 +168,19 @@ def _process_async(req: AgentRequest):
                 _resp = _r2.get(_url, timeout=5)
                 if _resp.status_code == 200 and _resp.json().get("ocr_image", False):
                     _ocr_image(req)
+                    # 记录 OCR 后的内容到聊天历史，不回复
+                    from ..strategy.chat_recorder import ChatRecorder
+                    ChatRecorder().record_user_message(req)
+                    ocr_skipped = True
+                    logger.info("OCR 完成，跳过回复: %.50s", req.content or "")
             except Exception:
                 pass
+
+        if ocr_skipped:
+            trace_event(req.request_id, "brain_done", protocol=req.protocol.value,
+                        user_id=req.user_id, metadata={})
+            ai_status.set("idle")
+            return
 
         response = strategy_engine.process(req)
 
