@@ -89,9 +89,25 @@ if __name__ == "__main__":
 | Web | WEB | smart | 管理后台聊天输入 |
 
 **三种策略：**
-- `smart` — processor 优先 → LLM + 工具调用
-- `direct` — processor 优先 → 兜底回复
+- `smart` — 纯 LLM + 工具调用（不经过 processor）。IMAGE 消息且用户开启 `ocr_image` 时自动 OCR → 存历史 → skip 不回复
+- `direct` — processor 优先处理，无命中则简单兜底回复
 - `ignore` — 只记录聊天数据，不处理
+
+### 智能 OCR
+
+smart 模式下收到 IMAGE 消息时，若用户配置开启 `ocr_image`：
+
+1. 从 wechat_gateway 下载图片
+2. 调用 PaddleOCR Simple Server 识别文字
+3. 用识别结果更新聊天记录的原消息（`UPDATE chat_messages SET content = ? WHERE id = ?`）
+4. 跳过回复（`skipped=True`），用户后续追问时 AI 从聊天历史中获取图片信息
+
+关键文件：
+- `src/common/lib/paddle_ocr.py` — PaddleOCR 客户端（`PaddleOCR` 类 + `ocr_recognize()` 便捷函数）
+- `src/brain_services/strategy/engine.py` — `_ocr_image()` 方法，process() 中在 smart 路径内调用
+- `.env` — `OCR_SERVER_URL` / `OCR_SERVER_TOKEN` 配置 OCR 服务地址
+
+processor 模式（direct）下 IMAGE 由处理器自行处理（如 homework 处理器调用百度 OCR），不经过 PaddleOCR。
 
 ## 三层记忆体系
 
@@ -136,6 +152,7 @@ if __name__ == "__main__":
 | write_pdf_file | 写 PDF 文件 | | ✅ |
 | read_text_file | 读文本文件 | ✅ | |
 | read_pdf_file | 读 PDF 文件 | ✅ | |
+| ocr_image | OCR 图片文字识别 | | |
 | rss_news | RSS 新闻资讯查询（今日时政要闻/股市财经） | | |
 | search_chat_history | 搜索聊天记录 | ✅ | |
 | run_python | 执行 Python 代码 | | ✅ |

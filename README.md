@@ -44,6 +44,7 @@
 - **LLM 驱动** — 支持 DeepSeek 等 API，可配置 system prompt 和工具
 - **三层记忆** — 短期（原始消息）、中期（LLM 摘要）、长期（持久化事实文件）
 - **策略引擎** — 每个用户可独立配置 `smart`/`direct`/`ignore` 三种策略
+- **图片 OCR** — smart 模式下自动识别图片文字，存储到聊天历史供后续追问（需配置 PaddleOCR 服务）
 - **工具插件系统** — 可热加载，支持 `final` 和 `silent` 属性
 
 ### 工具列表
@@ -58,7 +59,7 @@
 | get/set_volume | 音量控制 | send_voice | TTS 播放 |
 | list_exams / get_scores | 查考试成绩 | run_python | 执行 Python |
 | write/read_text_file / pdf | 文件读写 | search_chat_history | 聊天记录搜索 |
-| rss_news | RSS 新闻资讯查询 | | |
+| rss_news | RSS 新闻资讯查询 | ocr_image | 图片文字识别 |
 
 ### 处理器（热加载）
 
@@ -193,6 +194,8 @@ bun run build    # 生产构建
 | `VAD_TIMEOUT_SEC` | 录音超时 | 10 |
 | `VAD_SILENCE_MS` | 静音判定时长 | 1600 |
 | `TTS_URL` | TTS 服务地址 | — |
+| `OCR_SERVER_URL` | PaddleOCR 服务地址 | http://localhost:3000/recognize |
+| `OCR_SERVER_TOKEN` | PaddleOCR 认证 Token | — |
 | `HOME_ASSISTANT_URL` | HA 地址 | — |
 
 完整配置参考 `.env` 文件。
@@ -203,8 +206,8 @@ bun run build    # 生产构建
 
 | 策略 | 行为 |
 |------|------|
-| **smart** | 处理器优先 → LLM + 工具调用 |
-| **direct** | 处理器优先 → 兜底回复 |
+| **smart** | 纯 LLM + 工具调用（不经过处理器）。IMAGE 消息时自动 OCR → 存历史 → 不回复 |
+| **direct** | 处理器优先处理 → 兜底回复 |
 | **ignore** | 只记录聊天，不处理 |
 
 微信群聊支持 @ 检测，未 @ 的消息自动忽略（可配置）。
