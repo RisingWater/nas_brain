@@ -36,11 +36,13 @@ class AddReminderTool(BaseTool):
             name="add_reminder",
             display_name="添加提醒",
             description=(
-                "添加一个定时提醒。支持一次性、每天、每月。"
+                "添加一个定时提醒。支持一次性、每天、每月、农历每月。"
                 "时间格式：一次性='2026-07-09 21:00'，每天='21:00'，每月='15 21:00'（15号21点）。"
+                "如果用户提到农历（如'农历每月十五'），lunar=true, rtype=monthly, datetime='15 21:00'。"
                 "不指定接收人则默认发给设置者自己，也可指定微信名或群名。"
                 "例如：用户说'每天晚上9点提醒我吃药'→content=吃药,rtype=daily,datetime=21:00。"
                 "用户说'明天下午3点在群里提醒大家开会'→content=明天下午3点开会,rtype=once,datetime=具体时间。"
+                "用户说'农历每月15号提醒我交房租'→content=交房租,rtype=monthly,datetime=15 09:00,lunar=true。"
             ),
             parameters={
                 "type": "object",
@@ -50,6 +52,7 @@ class AddReminderTool(BaseTool):
                               "description": "once=一次性, daily=每天, monthly=每月"},
                     "datetime": {"type": "string",
                                  "description": "时间：once用'2026-07-09 21:00'，daily用'21:00'，monthly用'15 21:00'"},
+                    "lunar": {"type": "boolean", "description": "是否为农历日期（默认false，仅monthly类型有效）"},
                     "notify_target": {
                         "type": "string",
                         "description": "接收人微信名或群名（可选，不填默认发给设置者自己）",
@@ -67,6 +70,7 @@ class AddReminderTool(BaseTool):
                 "content": args["content"],
                 "rtype": args["rtype"],
                 "rdatetime": args["datetime"],
+                "lunar": bool(args.get("lunar", False)),
                 "strategy": "direct",
                 "notify_type": "wechat",
             }
@@ -105,7 +109,8 @@ class ListRemindersTool(BaseTool):
             lines = []
             for s in schedules:
                 target = s.get("notify_target") or "自己"
-                lines.append(f"#{s['id']} [{_TYPE_CN.get(s['rtype'], s['rtype'])}] "
+                lunar_tag = "农历 " if s.get("lunar") else ""
+                lines.append(f"#{s['id']} [{lunar_tag}{_TYPE_CN.get(s['rtype'], s['rtype'])}] "
                              f"{s['rdatetime'] or ''} → {target} — {s['content']}")
             return {"text": "\n".join(lines)}
         except Exception as e:

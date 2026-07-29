@@ -40,3 +40,4 @@ pypdf
 simplejson
 sortedcontainers
 pycups
+lunardate

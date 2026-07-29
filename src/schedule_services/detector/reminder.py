@@ -27,6 +27,8 @@ class ReminderDetector(BaseDetector):
         super().__init__()
         self._schedules: list[dict] = []
         self._last_reload = 0.0
+        # 启动时立即加载一次缓存
+        self.reload()
 
     def reload(self):
         """从 db_services 全量刷新缓存（启动时 + API 增删改后调用）"""
@@ -98,8 +100,21 @@ class ReminderDetector(BaseDetector):
                 parts = rdatetime.strip().split(" ")
                 day = int(parts[0])
                 time_parts = parts[1].split(":")
-                if now.day != day:
-                    return False
+
+                if s.get("lunar"):
+                    # 农历：将当前公历日期转为农历再比较日
+                    try:
+                        from lunardate import LunarDate
+                        lunar = LunarDate.fromSolarDate(now.year, now.month, now.day)
+                        if lunar.day != day:
+                            return False
+                    except ImportError:
+                        logger.error("lunardate 未安装，农历提醒无法工作")
+                        return False
+                else:
+                    if now.day != day:
+                        return False
+
                 task_minutes = int(time_parts[0]) * 60 + int(time_parts[1])
                 return current_minutes == task_minutes
             except (ValueError, IndexError):
