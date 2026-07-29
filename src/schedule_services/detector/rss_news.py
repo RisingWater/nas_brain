@@ -10,7 +10,7 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, time as dt_time
-from email.utils import parsedate_to_datetime
+from email.utils import formatdate, parsedate_to_datetime
 from typing import Literal
 from pydantic import BaseModel, Field
 
@@ -196,7 +196,7 @@ class RssNewsDetector(BaseDetector):
 
             new_items.append({
                 "title": title,
-                "pubDate": pubdate_str,
+                "pubDate": pubdate_str or formatdate(timeval=now.timestamp(), localtime=True),
                 "link": link,
                 "guid": guid,
                 "description": clean_desc,
