@@ -104,12 +104,12 @@ class ReminderDetector(BaseDetector):
                 if s.get("lunar"):
                     # 农历：将当前公历日期转为农历再比较日
                     try:
-                        from lunardate import LunarDate
-                        lunar = LunarDate.fromSolarDate(now.year, now.month, now.day)
-                        if lunar.day != day:
+                        from zhdate import ZhDate
+                        lunar = ZhDate.from_datetime(now)
+                        if lunar.lunar_day != day:
                             return False
                     except ImportError:
-                        logger.error("lunardate 未安装，农历提醒无法工作")
+                        logger.error("zhdate 未安装，农历提醒无法工作")
                         return False
                 else:
                     if now.day != day:
