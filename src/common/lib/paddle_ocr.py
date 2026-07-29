@@ -26,6 +26,7 @@ class PaddleOCR:
                 if self._token:
                     headers["Authorization"] = f"Bearer {self._token}"
                 resp = requests.post(self._url, files={"img": f}, headers=headers, timeout=30)
+            logger.info("PaddleOCR raw: %s %s", resp.status_code, resp.text[:500])
             resp.raise_for_status()
             data = resp.json()
             # PaddleOCR 返回格式：{"data": [{"text": "...", "confidence": ...}, ...]}

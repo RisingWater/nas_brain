@@ -224,6 +224,7 @@ class StrategyEngine:
             from src.common.lib.paddle_ocr import PaddleOCR
             ocr = PaddleOCR()
             result = ocr.recognize(img_path)
+            logger.info("OCR 结果: success=%s text=%.100s items=%d", result.get("success"), result.get("text","")[:100], len(result.get("items", [])))
             if result["success"] and result["text"]:
                 logger.info("OCR 识别完成: %.50s", result["text"])
                 return result["text"]
