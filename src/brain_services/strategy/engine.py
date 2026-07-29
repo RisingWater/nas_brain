@@ -103,11 +103,13 @@ class StrategyEngine:
                     updated = f"{req.content or ''}\n【OCR识别结果】\n{ocr_text}"
                     self.recorder.update_content(user_msg_id, updated)
                     logger.info("图片 OCR 完成，跳过回复: %.50s", ocr_text)
-                    return AgentResponse(data={
-                        "request_id": req.request_id,
-                        "text": "",
-                        "skipped": True,
-                    })
+                else:
+                    logger.info("图片 OCR 无结果，跳过回复")
+                return AgentResponse(data={
+                    "request_id": req.request_id,
+                    "text": "",
+                    "skipped": True,
+                })
             return self._process_smart(req, config, user_msg_id)
 
         # direct：processor 优先，无命中则简单兜底
