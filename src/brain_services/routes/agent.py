@@ -10,11 +10,11 @@ import logging
 import threading
 from fastapi import APIRouter, BackgroundTasks
 from ..schema.brain_schema import AgentResponse
-from src.common.schemas.agent_request import AgentRequest, ContentType, ProtocolType
+from src.common.schemas.agent_request import AgentRequest, ProtocolType
 from ..strategy import strategy_engine
 from ..stats import stats
 from ..status import ai_status
-from src.common.utils.tracer import trace_content, trace_event, trace_reply as _trace_reply
+from src.common.utils.tracer import trace_event, trace_reply as _trace_reply
 
 logger = logging.getLogger("brain_services")
 
@@ -103,49 +103,6 @@ def _update_wakeword_category(wakeword_id: str, category: str):
                 break
 
 
-def _ocr_image(req: AgentRequest):
-    """下载图片并 OCR，将识别结果补充到 req.content，记录追踪"""
-    import shutil
-    import tempfile
-    import requests as _req
-    from src.common.utils import cfg as _cfg
-
-    trace_event(req.request_id, "ocr_start", protocol=req.protocol.value, user_id=req.user_id)
-    try:
-        # 下载图片
-        dl_url = _cfg.get_service_url("wechat_gateway", f"/api/gateway/files/{req.file_id}/download")
-        resp = _req.get(dl_url, timeout=30)
-        if resp.status_code != 200:
-            logger.warning("OCR 下载图片失败: HTTP %s", resp.status_code)
-            return
-    except Exception as e:
-        logger.warning("OCR 下载图片异常: %s", e)
-        return
-
-    tmpdir = tempfile.mkdtemp()
-    try:
-        img_path = os.path.join(tmpdir, "ocr_input.png")
-        with open(img_path, "wb") as f:
-            f.write(resp.content)
-
-        from src.common.lib.paddle_ocr import PaddleOCR
-        ocr = PaddleOCR()
-        result = ocr.recognize(img_path)
-        if result["success"] and result["text"]:
-            old_content = req.content
-            req.content = f"{old_content}\n【OCR识别结果】\n{result['text']}"
-            trace_content(req.request_id, req.content)
-            logger.info("OCR 完成: %.50s", result["text"])
-            trace_event(req.request_id, "ocr_done", protocol=req.protocol.value,
-                        user_id=req.user_id, metadata={"ocr_text": result["text"][:200]})
-        else:
-            logger.info("OCR 未识别到文字")
-    except Exception as e:
-        logger.warning("OCR 处理异常: %s", e)
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
-
-
 def _process_async(req: AgentRequest):
     """后台处理：策略引擎处理 → 推送回复到 gateway"""
     try:
@@ -157,30 +114,6 @@ def _process_async(req: AgentRequest):
         logger.info("追踪 %s user=%s content=%.30s", req.request_id[:12], req.user_id, req.content or "")
         trace_event(req.request_id, "brain_receive", protocol=req.protocol.value,
                     user_id=req.user_id, metadata={"content": req.content or ""})
-
-        # IMAGE 类型：检查用户配置是否开启 OCR，开启则自动识别图片文字
-        ocr_skipped = False
-        if req.content_type == ContentType.IMAGE and req.file_id:
-            try:
-                import requests as _r2
-                from src.common.utils import cfg as _cfg2
-                _url = _cfg2.get_service_url("db_services", f"/api/user-configs/{req.user_id}")
-                _resp = _r2.get(_url, timeout=5)
-                if _resp.status_code == 200 and _resp.json().get("ocr_image", False):
-                    _ocr_image(req)
-                    # 记录 OCR 后的内容到聊天历史，不回复
-                    from ..strategy.chat_recorder import ChatRecorder
-                    ChatRecorder().record_user_message(req)
-                    ocr_skipped = True
-                    logger.info("OCR 完成，跳过回复: %.50s", req.content or "")
-            except Exception:
-                pass
-
-        if ocr_skipped:
-            trace_event(req.request_id, "brain_done", protocol=req.protocol.value,
-                        user_id=req.user_id, metadata={})
-            ai_status.set("idle")
-            return
 
         response = strategy_engine.process(req)
 

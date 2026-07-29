@@ -3,7 +3,7 @@ import os
 import logging
 import requests
 from src.common.utils import cfg
-from src.common.schemas.agent_request import AgentRequest, ProtocolType
+from src.common.schemas.agent_request import AgentRequest, ContentType, ProtocolType
 from ..schema.brain_schema import AgentResponse
 from ..processors import registry as proc_registry
 from ..tools import registry as tool_registry
@@ -114,6 +114,20 @@ class StrategyEngine:
             except Exception as e:
                 logger.error("Processor %s 异常: %s", processor.name, e, exc_info=True)
 
+        # 4b. Smart + IMAGE：自动 OCR 识别图片文字，不回复，存历史供后续追问
+        if strategy == "smart" and req.content_type == ContentType.IMAGE and req.file_id:
+            if config.get("ocr_image"):
+                ocr_text = self._ocr_image(req)
+                if ocr_text:
+                    req.content = f"{req.content or ''}\n【OCR识别结果】\n{ocr_text}"
+                    self.recorder.record_user_message(req)
+                    logger.info("图片 OCR 完成，跳过回复: %.50s", ocr_text)
+                    return AgentResponse(data={
+                        "request_id": req.request_id,
+                        "text": "",
+                        "skipped": True,
+                    })
+
         # 5. 按策略分流
         if strategy == "smart":
             return self._process_smart(req, config, user_msg_id)
@@ -183,3 +197,42 @@ class StrategyEngine:
             "text": f"已收到你的消息：{req.content or ''}",
             "received": True,
         })
+
+    def _ocr_image(self, req: AgentRequest) -> str | None:
+        """下载图片并 OCR，返回识别文本"""
+        import shutil
+        import tempfile
+        import requests as _req
+        from src.common.utils import cfg as _cfg
+        from src.common.utils.tracer import trace_event
+
+        trace_event(req.request_id, "ocr_start", protocol=req.protocol.value, user_id=req.user_id)
+        try:
+            dl_url = _cfg.get_service_url("wechat_gateway", f"/api/gateway/files/{req.file_id}/download")
+            resp = _req.get(dl_url, timeout=30)
+            if resp.status_code != 200:
+                logger.warning("OCR 下载图片失败: HTTP %s", resp.status_code)
+                return None
+        except Exception as e:
+            logger.warning("OCR 下载图片异常: %s", e)
+            return None
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            img_path = os.path.join(tmpdir, "ocr_input.png")
+            with open(img_path, "wb") as f:
+                f.write(resp.content)
+
+            from src.common.lib.paddle_ocr import PaddleOCR
+            ocr = PaddleOCR()
+            result = ocr.recognize(img_path)
+            if result["success"] and result["text"]:
+                logger.info("OCR 识别完成: %.50s", result["text"])
+                return result["text"]
+            logger.info("OCR 未识别到文字")
+            return None
+        except Exception as e:
+            logger.warning("OCR 处理异常: %s", e)
+            return None
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
