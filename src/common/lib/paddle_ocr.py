@@ -29,25 +29,22 @@ class PaddleOCR:
             logger.info("PaddleOCR raw: %s %s", resp.status_code, resp.text[:500])
             resp.raise_for_status()
             data = resp.json()
-            # PaddleOCR 返回格式：{"data": [{"text": "...", "confidence": ...}, ...]}
+            # PaddleOCR Simple Server 返回: {"text": "...", "lines": [[{"text":"...","confidence":...}]]}
+            if "text" in data and data["text"]:
+                return {"success": True, "text": data["text"], "items": data.get("lines", []), "error": ""}
+            # 兼容其他格式
             items = data.get("data", data.get("result", []))
             if not items:
                 return {"success": True, "text": "", "items": [], "error": ""}
-            lines = []
-            parsed = []
+            texts = []
             for item in items:
                 if isinstance(item, dict):
-                    text = item.get("text", str(item))
-                    lines.append(text)
-                    parsed.append({"text": text, "confidence": item.get("confidence", 1.0)})
+                    texts.append(item.get("text", str(item)))
                 elif isinstance(item, str):
-                    lines.append(item)
-                    parsed.append({"text": item, "confidence": 1.0})
+                    texts.append(item)
                 else:
-                    s = str(item)
-                    lines.append(s)
-                    parsed.append({"text": s, "confidence": 1.0})
-            return {"success": True, "text": "\n".join(lines), "items": parsed, "error": ""}
+                    texts.append(str(item))
+            return {"success": True, "text": "\n".join(texts), "items": items, "error": ""}
         except Exception as e:
             logger.error("PaddleOCR 识别失败: %s", e)
             return {"success": False, "text": "", "items": [], "error": str(e)}
