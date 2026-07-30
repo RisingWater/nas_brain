@@ -54,6 +54,9 @@ class StrategyEngine:
 
     def should_skip(self, req: AgentRequest, config: dict) -> bool:
         """是否应该跳过处理（群聊 + group_at_only + 没 @）"""
+        # 非文字消息（图片/文件/链接/视频）无法 @，不跳过
+        if req.content_type != ContentType.TEXT:
+            return False
         if req.chat_type.value != "group":
             return False
         if not config.get("group_at_only", True):
@@ -135,6 +138,15 @@ class StrategyEngine:
 
     def _process_smart(self, req: AgentRequest, config: dict, user_msg_id: int | None = None) -> AgentResponse:
         """Smart 模式：LLM + 工具调用"""
+        # 非文字消息（无 processor 处理的情况下）LLM 无法处理，直接跳过
+        if req.content_type != ContentType.TEXT:
+            logger.info("非文字消息跳过 LLM: content_type=%s", req.content_type.value)
+            return AgentResponse(data={
+                "request_id": req.request_id,
+                "text": "",
+                "skipped": True,
+            })
+
         # 构建上下文
         sender = (req.metadata or {}).get("sender", "") if hasattr(req, 'metadata') else ""
         messages = self.context_builder.build(
