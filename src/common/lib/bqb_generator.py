@@ -9,9 +9,9 @@ from urllib.parse import quote
 logger = logging.getLogger(__name__)
 
 _BQB_DIR = os.getenv("BQB_DIR", "data/bqb")
-_API_BASE = os.getenv("BQB_API_URL", "http://129.211.70.28/api/img/apihzbqb.php")
-_API_ID = os.getenv("BQB_API_ID", "10019603")
-_API_KEY = os.getenv("BQB_API_KEY", "fca1848ad76ba059f6346c3c601aa624")
+_API_BASE = os.getenv("BQB_API_URL")
+_API_ID = os.getenv("BQB_API_ID")
+_API_KEY = os.getenv("BQB_API_KEY")
 
 _scraper = None
 
@@ -34,6 +34,9 @@ def _extract_filename(url: str) -> str:
 
 def search_bqb(keyword: str, limit: int = 10) -> list[str]:
     """搜索表情包，返回图片 URL 列表"""
+    if not _API_ID or not _API_KEY or not _API_BASE:
+        logger.error("BQB_API_ID 或 BQB_API_KEY 未配置")
+        return []
     url = f"{_API_BASE}?id={_API_ID}&key={_API_KEY}&type=2&words={quote(keyword)}&limit={limit}"
     scraper = _get_scraper()
     resp = scraper.get(url, timeout=15)
