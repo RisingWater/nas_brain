@@ -257,13 +257,17 @@ class StrategyEngine:
             with open(img_path, "wb") as f:
                 f.write(resp.content)
 
-            from src.common.lib.paddle_ocr import PaddleOCR
+            from src.common.lib.paddle_ocr import PaddleOCR, layout_ocr_text
             ocr = PaddleOCR()
             result = ocr.recognize(img_path)
             logger.info("OCR 结果: success=%s text=%.100s items=%d", result.get("success"), result.get("text","")[:100], len(result.get("items", [])))
-            if result["success"] and result["text"]:
-                logger.info("OCR 识别完成: %.50s", result["text"])
-                return result["text"]
+            if result["success"]:
+                # 优先用坐标重排版面（保留视觉布局，避免 LLM 错误组合相邻字段），
+                # 无坐标时回退到服务端拼接的 text
+                ocr_text = layout_ocr_text(result.get("items")) or result.get("text", "")
+                if ocr_text:
+                    logger.info("OCR 识别完成: %.50s", ocr_text)
+                    return ocr_text
             logger.info("OCR 未识别到文字")
             return None
         except Exception as e:

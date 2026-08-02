@@ -65,3 +65,81 @@ def ocr_recognize(image_path: str) -> str:
     """便捷函数：直接返回识别文本"""
     result = get_ocr().recognize(image_path)
     return result["text"]
+
+
+def layout_ocr_text(lines: list, gap_factor: float = 1.15) -> str:
+    """按 box 坐标重建版面，生成适合 LLM 阅读的多行文本
+
+    OCR 服务返回的 text 是按识别顺序拼接的纯文本流，丢失版面信息：
+    视觉上相距很远的字段（如"下单时间"与车次时刻）在文本里相邻，
+    LLM 容易把它们错误组合。此函数用坐标还原布局：
+
+    - 同一视觉行（y 中心接近）的片段按 x 从左到右合并为一行
+    - 行距显著超过中位行距（视觉区块边界）时插入空行分隔
+
+    行距用「顶到顶」（top-to-top）而非底到顶：PaddleOCR 的 box 高度
+    虚高（含 padding，且不同行差异大），底到顶间距会被严重扭曲；
+    顶到顶间距分布更干净，块内行距 vs 块间行距有清晰分层。
+
+    分块阈值自适应：取所有行距的中位数为基线（均匀行距的截图如终端
+    日志，所有行距 ≈ 中位数，不会分块；有区块的截图，块间行距显著
+    超过中位数）。判定需要同时满足两个条件（防像素级噪声误分）：
+    gap > 中位行距 × gap_factor 且 gap > 中位行距 + 3px
+
+    Args:
+        lines: PaddleOCR 返回的 lines 字段（嵌套数组）
+            [[{"text": "...", "box": {"x","y","width","height"}, "confidence": ...}], ...]
+        gap_factor: 区块判定系数（默认 1.15）
+
+    Returns:
+        重排后的多行文本；lines 为空时返回 ""
+    """
+    items = []
+    for group in lines or []:
+        if isinstance(group, list):
+            for it in group:
+                if isinstance(it, dict) and it.get("text") and isinstance(it.get("box"), dict):
+                    items.append(it)
+        elif isinstance(group, dict) and group.get("text") and isinstance(group.get("box"), dict):
+            items.append(group)
+    if not items:
+        return ""
+
+    # 1. y 中心聚类成视觉行（同一行内按 x 排序）
+    rows = []
+    for it in items:
+        box = it["box"]
+        x = box.get("x", 0) or 0
+        y = box.get("y", 0) or 0
+        w = box.get("width", 0) or 0
+        h = box.get("height", 0) or 0
+        cy = y + h / 2
+        # 同行判定：中心差 <= 平均行高 * 0.45。
+        # 注意 OCR box 高度偏大（含 padding），相邻视觉行的中心差可能接近行高，
+        # 阈值过宽会把多行误并成一行；同一行内片段的中心差通常 < 5px，余量充足
+        for row in rows:
+            if abs(cy - row["cy"]) <= (row["h"] + h) / 2 * 0.45:
+                row["items"].append((x, str(it["text"])))
+                row["cy"] = (row["cy"] + cy) / 2
+                row["y"] = min(row["y"], y)
+                row["h"] = max(row["h"], h)
+                break
+        else:
+            rows.append({"items": [(x, str(it["text"]))], "cy": cy, "y": y, "h": h})
+
+    # 2. 计算顶到顶行距的中位数（自适应当前截图的行距尺度）
+    rows.sort(key=lambda r: r["y"])
+    gaps = [rows[i]["y"] - rows[i - 1]["y"] for i in range(1, len(rows))]
+    gaps.sort()
+    median_gap = gaps[len(gaps) // 2] if gaps else 0
+
+    # 3. 自上而下输出，行距显著超过中位数的行视为新视觉区块，用空行分隔
+    out = []
+    for i, row in enumerate(rows):
+        line = " ".join(t for _, t in sorted(row["items"]))
+        if i > 0 and median_gap > 0:
+            gap = row["y"] - rows[i - 1]["y"]
+            if gap > median_gap * gap_factor and gap > median_gap + 3:
+                out.append("")
+        out.append(line)
+    return "\n".join(out)
