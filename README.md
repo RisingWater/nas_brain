@@ -243,7 +243,7 @@ class MyTool(BaseTool):
             description="工具描述",
             parameters={...},    # JSON Schema
             silent=False,        # True 则不播放前缀文本
-            final=True,          # True 则直接返回，不回 LLM
+            final=True,          # True 则直接返回，不回 LLM（仅语音请求生效，微信/Web 忽略 final）
         )
 
     def execute(self, args: dict) -> dict:

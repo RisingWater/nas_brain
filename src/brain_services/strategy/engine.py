@@ -1,6 +1,5 @@
 """策略引擎 — 消息分流 + smart/direct 处理"""
 import os
-import random
 import logging
 import requests
 from src.common.utils import cfg
@@ -13,6 +12,7 @@ from .chat_recorder import ChatRecorder
 from .context_builder import LLMContextBuilder
 from .llm_handler import LLMHandler
 from .tool_filter import ToolFilter
+from src.common.lib.pity_rate import PityRate
 
 logger = logging.getLogger("brain_services.strategy.engine")
 
@@ -27,6 +27,8 @@ class StrategyEngine:
         self.context_builder = LLMContextBuilder()
         self.llm_handler = LLMHandler()
         self.tool_filter = ToolFilter()
+        # 表情包保底概率，按用户各持一个实例（配置的概率变化时自动重建）
+        self._bqb_pity: dict[str, PityRate] = {}
 
     def get_user_config(self, user_id: str) -> dict:
         """获取用户配置（不存在则返回默认值）"""
@@ -169,11 +171,14 @@ class StrategyEngine:
         ai_status.set("thinking", message=req.content[:80] if req.content else "")
 
         # 执行 LLM 循环
+        # 仅语音启用 final 属性（VAD 收录短 + TTS 慢，延迟敏感）；
+        # 微信/Web 禁用（多工具场景伪造响应容易出错，且无 TTS 不敏感）
         reply, files, req_tokens = self.llm_handler.handle(
             user_id=req.user_id,
             messages=messages,
             tools=filtered_tools,
             request_id=req.request_id,
+            final_enabled=req.protocol == ProtocolType.VOICE,
         )
         # 记录本次请求的 token 用量到 metadata
         req.metadata["prompt_tokens"] = req_tokens.get("prompt_tokens", 0)
@@ -195,16 +200,23 @@ class StrategyEngine:
                 "skipped": True,
             })
 
-        # 表情包：微信 smart 模式下，按概率附带一张梗图
+        # 表情包：微信 smart 模式下，按保底概率附带一张梗图
+        # 配置的 bqb_probability 是数学期望，PityRate 自动求解初始概率保证长期期望一致
         if reply and reply.strip() not in ("__SKIP__", "") and config.get("send_bqb"):
-            if req.protocol == ProtocolType.WECHAT and random.randint(1, 100) <= config.get("bqb_probability", 50):
-                bqb_path = self._attach_bqb(reply)
-                if bqb_path:
-                    if files is None:
-                        files = []
-                    elif isinstance(files, tuple):
-                        files = list(files)
-                    files.append(bqb_path)
+            if req.protocol == ProtocolType.WECHAT:
+                target_prob = config.get("bqb_probability", 50) / 100
+                pity = self._bqb_pity.get(req.user_id)
+                if pity is None or abs(pity.target_prob - target_prob) > 1e-6:
+                    pity = PityRate(target_prob)
+                    self._bqb_pity[req.user_id] = pity
+                if pity.roll():
+                    bqb_path = self._attach_bqb(reply)
+                    if bqb_path:
+                        if files is None:
+                            files = []
+                        elif isinstance(files, tuple):
+                            files = list(files)
+                        files.append(bqb_path)
 
         return AgentResponse(data={
             "request_id": req.request_id,

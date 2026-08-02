@@ -159,6 +159,8 @@ processor 模式（direct）下 IMAGE 由处理器自行处理（如 homework �
 
 **final 工具**：执行后直接返回结果，不送回 LLM 继续处理，但在上下文中插入假响应保持链路完整。
 
+**final 属性按协议生效**：仅语音（VOICE）请求启用 final（VAD 收录短 + TTS 慢，延迟敏感）；微信/Web 请求禁用 final，所有工具按正常逻辑执行（容易一次触发多个工具，伪造响应容易出错，且无 TTS 对延迟不敏感）。由 `engine.py` 调用 `llm_handler.handle(final_enabled=req.protocol == ProtocolType.VOICE)` 控制。
+
 ### 处理器列表（hot-reload：`POST /api/processors/reload`）
 
 | 处理器 | 触发条件 | 说明 |
@@ -166,6 +168,12 @@ processor 模式（direct）下 IMAGE 由处理器自行处理（如 homework �
 | homework | IMAGE | OCR 作业图片 |
 | urlsave | LINK | 链接转 DOCX 文件 |
 | print | TEXT/IMAGE/FILE | CUPS 打印（仅 Linux） |
+
+### 表情包附带（微信 smart 模式）
+
+用户配置开启 `send_bqb` 后，smart 模式微信回复按 `bqb_probability`（百分比）概率附带一张梗图（LLM 生成 3 个关键词逐个搜索 → `src/common/lib/bqb_generator.py` 下载缓存到 `data/bqb/`）。
+
+概率采用**保底机制**（类似网游暴击率，`src/common/lib/pity_rate.py`）：配置的 `bqb_probability` 是**数学期望**——构造时数值求解初始概率，使保底过程的长期期望精确等于配置值（连续未触发则概率递增，最多 5 次未中后必中，触发后重置）。按用户各持一个实例（`engine.py` 的 `_bqb_pity` 字典），配置概率变化时自动重建。
 
 ### 返回值格式
 
@@ -194,7 +202,7 @@ LLM 根据 description 自主选择工具。关键路由策略：
 ## 工具返回值中的 silent 属性
 
 - `silent=True`：LLM 调用工具时的前缀文本（如"好嘞，我来查一下"）不播放/不展示
-- `final=True`：工具结果不送回 LLM 继续处理，直接作为最终回复
+- `final=True`：工具结果不送回 LLM 继续处理，直接作为最终回复（**仅语音请求生效**，微信/Web 请求忽略 final 按正常逻辑执行）
 
 ## Detector 插件系统
 

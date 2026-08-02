@@ -24,8 +24,15 @@ class LLMHandler:
         self.recorder = ChatRecorder()
 
     def handle(self, user_id: str, messages: list[dict],
-               tools: list[dict], request_id: str = "") -> tuple[str, list[str], dict]:
+               tools: list[dict], request_id: str = "",
+               final_enabled: bool = True) -> tuple[str, list[str], dict]:
         """函数调用循环：LLM → 工具 → LLM → ... → 最终回复
+
+        Args:
+            final_enabled: 是否启用工具 final 属性。
+                启用时 final 工具执行后直接返回结果（适合语音，延迟敏感）；
+                禁用时所有工具按正常逻辑执行，结果送回 LLM 继续处理（适合微信，避免伪造响应）。
+                ice_breaker 无工具调用，不受影响。
 
         Returns:
             (最终回复文本, 附件文件路径列表, {prompt_tokens, completion_tokens})
@@ -124,7 +131,7 @@ class LLMHandler:
                                                   tool_call_id=str(tc.get("id", "")))
 
                 tool_obj = tool_registry.get(tool_name)
-                if tool_obj and tool_obj.final:
+                if final_enabled and tool_obj and tool_obj.final:
                     final_tool_responses.append({
                         "role": "tool", "tool_call_id": str(tc.get("id", "")),
                         "content": json.dumps(result, ensure_ascii=False),
