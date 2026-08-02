@@ -6,6 +6,7 @@ import logging
 import time
 import threading
 import requests
+from collections import OrderedDict
 from datetime import datetime
 from typing import Optional
 
@@ -25,6 +26,11 @@ _BRAIN_URL = cfg.get_service_url("brain_services", "/api/agent-request")
 # 轮询间隔（秒）
 _POLL_INTERVAL = int(os.getenv("WECHAT_POLL_INTERVAL", "3"))
 
+# 消息去重：WXAuto 服务偶尔重复返回同一条消息（轮询指针回退），
+# 按微信消息 id 缓存去重，防止同一条消息被转发/处理两次导致双回复。
+_DEDUP_TTL = 60   # 缓存保留秒数（重复间隔实测 7-10s）
+_DEDUP_MAX = 50   # 缓存条数上限（有界，防内存增长）
+
 
 class WeChatProcessor:
     """微信消息处理器"""
@@ -32,6 +38,8 @@ class WeChatProcessor:
     def __init__(self):
         self.wxauto = WXAuto()
         self._running = False
+        # 已处理消息 id 缓存（id → 时间戳），OrderedDict 保持到达顺序便于淘汰
+        self._seen_msg_ids: OrderedDict[str, float] = OrderedDict()
 
     # ---- 用户查找 ----
 
@@ -152,6 +160,21 @@ class WeChatProcessor:
         except requests.RequestException as e:
             logger.error("发送到 brain_services 失败: %s", e)
 
+    def _is_duplicate(self, msg_id: str) -> bool:
+        """判断消息 id 是否已处理过（重复投递）
+
+        先淘汰过期条目（TTL 之外）和超限条目（最旧优先），再查重。
+        """
+        now = time.time()
+        # 淘汰过期条目
+        expired = [k for k, t in self._seen_msg_ids.items() if now - t > _DEDUP_TTL]
+        for k in expired:
+            del self._seen_msg_ids[k]
+        # 超限：移除最旧的条目（popitem(last=False) 从头弹出）
+        while len(self._seen_msg_ids) >= _DEDUP_MAX:
+            self._seen_msg_ids.popitem(last=False)
+        return msg_id in self._seen_msg_ids
+
     # ---- 轮询循环 ----
 
     def run_loop(self):
@@ -179,6 +202,13 @@ class WeChatProcessor:
                             continue
                         if msg.get("class") == "SystemMessage" or msg.get("attr") == "system":
                             continue
+                        # 去重：WXAuto 可能重复返回同一条消息，防止转发两次导致双回复
+                        msg_id = msg.get("id")
+                        if msg_id and self._is_duplicate(msg_id):
+                            logger.info("跳过重复消息 id=%s: %.40s", msg_id, msg.get("content", ""))
+                            continue
+                        if msg_id:
+                            self._seen_msg_ids[msg_id] = time.time()
                         self._process_one(msg)
 
             except Exception as e:

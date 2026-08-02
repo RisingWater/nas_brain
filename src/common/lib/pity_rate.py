@@ -15,6 +15,7 @@ PityRate 用软保底消除长连空：连续未触发时实际概率递增，�
 """
 import random
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,8 @@ def _solve_initial(target: float, steps: int) -> float:
 class PityRate:
     """保底概率计算器
 
-    非线程安全：同一个实例应由单线程调用（engine 按 user_id 各持一个实例）。
+    线程安全：roll()/reset() 内部持锁，多线程并发调用互斥
+    （engine 按 user_id 各持一个实例，重复消息并发处理也不会竞争）。
     """
 
     def __init__(self, target_prob: float = 0.5, pity_steps: int = 5):
@@ -75,6 +77,7 @@ class PityRate:
         self.initial_prob = _solve_initial(target_prob, pity_steps)
         self.increment = (1 - self.initial_prob) / pity_steps
         self._misses = 0
+        self._lock = threading.Lock()  # roll/reset 互斥，支持多线程并发调用
         logger.debug("PityRate 初始化: 目标期望=%.0f%% 初始概率=%.0f%% 递增=%.0f%%/次",
                      target_prob * 100, self.initial_prob * 100, self.increment * 100)
 
@@ -94,16 +97,18 @@ class PityRate:
         - 触发：重置连续未触发次数，返回 True
         - 未触发：连续次数 +1（下次概率提升），返回 False
         """
-        if random.random() < self.current_prob:
-            if self._misses > 0:
-                logger.debug("保底概率触发: 连续 %d 次未中后命中", self._misses)
-            self._misses = 0
-            return True
-        self._misses += 1
-        logger.debug("保底概率未触发: 累计 %d 次, 下次概率 %.0f%%",
-                     self._misses, self.current_prob * 100)
-        return False
+        with self._lock:
+            if random.random() < self.current_prob:
+                if self._misses > 0:
+                    logger.debug("保底概率触发: 连续 %d 次未中后命中", self._misses)
+                self._misses = 0
+                return True
+            self._misses += 1
+            logger.debug("保底概率未触发: 累计 %d 次, 下次概率 %.0f%%",
+                         self._misses, self.current_prob * 100)
+            return False
 
     def reset(self):
         """重置连续未触发次数"""
-        self._misses = 0
+        with self._lock:
+            self._misses = 0
