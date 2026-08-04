@@ -116,7 +116,14 @@ class LLMHandler:
                     args = {}
 
                 logger.info("执行工具: %s args=%s", tool_name, args)
-                result = tool_registry.execute(tool_name, args)
+                try:
+                    result = tool_registry.execute(tool_name, args)
+                except Exception as e:
+                    # 工具异常也写入 tool 响应（错误信息）：保证 DB 里
+                    # assistant(tool_calls) 与 tool 响应永远配对完整，
+                    # 后续构建上下文不会出现孤立 tool_calls 触发 400
+                    logger.error("工具 %s 执行异常: %s", tool_name, e, exc_info=True)
+                    result = {"text": f"工具执行失败: {e}", "error": str(e)}
                 result_text = result.get("text", "（无返回）")
                 logger.info("工具 %s 返回: %.100s", tool_name, result_text)
 
@@ -161,25 +168,3 @@ class LLMHandler:
 
         logger.warning("LLM 工具调用达到最大迭代次数 %d", self.MAX_ITERATIONS)
         return "（工具调用次数过多，请简化问题）", all_files, {"prompt_tokens": req_prompt, "completion_tokens": req_completion}
-
-    @staticmethod
-    def _cleanup_orphan_tool_calls(messages: list[dict]):
-        """清理没有对应 tool response 的 tool_calls 消息"""
-        i = 0
-        while i < len(messages):
-            msg = messages[i]
-            if isinstance(msg, dict) and msg.get("tool_calls"):
-                tc_ids = {tc["id"] for tc in msg["tool_calls"]}
-                j = i + 1
-                while j < len(messages):
-                    nxt = messages[j]
-                    if isinstance(nxt, dict) and nxt.get("role") == "tool":
-                        tc_ids.discard(nxt.get("tool_call_id", ""))
-                        j += 1
-                    else:
-                        break
-                if tc_ids:
-                    logger.debug("清理孤立 tool_calls: %s", tc_ids)
-                    messages.pop(i)
-                    continue
-            i += 1

@@ -100,7 +100,9 @@ class LLMContextBuilder:
         for msg in short_term:
             messages.append(msg)
 
-        # 清理短期记忆中孤立的 tool_calls（final 工具打断链路的场景）
+        # 保底清理：正常情况下（同用户串行处理 + final/异常工具都写 tool 响应）
+        # DB 里 tool_calls 与 tool 响应永远配对完整；仅进程崩溃（docker 重启）、
+        # DB 写入超时会留下悬挂记录，这里兜底删除，防止非法序列触发 400
         self._cleanup_orphan_tool_calls(messages)
 
         # 5. Current user message
@@ -210,22 +212,52 @@ class LLMContextBuilder:
 
     @staticmethod
     def _cleanup_orphan_tool_calls(messages: list[dict]):
-        """移除没有对应 tool 响应的 tool_calls 消息"""
+        """保底清理工具调用链，保证发给 LLM 的消息序列合法（API 要求 tool 消息
+        前面必须存在带 tool_calls 的 assistant 消息，否则 400）
+
+        正常情况下 DB 配对完整（同用户串行处理避免并发交错；final 工具和异常
+        工具也都会写入 tool 响应），此函数仅在残留场景兜底：
+        - 进程中途崩溃/重启（docker 重启）：assistant(tool_calls) 落库但 tool
+          响应没写完 → 悬挂 tool_calls
+        - DB 写入超时：tool 响应未落库 → 悬挂 tool_calls
+
+        双向清理：
+        1. assistant(tool_calls) 的每个 id 在上下文任意位置有 tool 响应 → 保留，
+           否则整个删除（悬挂 tool_calls）
+        2. tool 消息在前面任意位置找不到包含其 id 的 assistant(tool_calls)
+           → 删除（孤儿 tool 消息，防御性）
+        """
+        if not messages:
+            return
+        # 1. 按 tool_call_id 全局建索引，判断 assistant tool_calls 是否都有响应
+        tool_ids = {
+            m.get("tool_call_id")
+            for m in messages
+            if isinstance(m, dict) and m.get("role") == "tool"
+        }
         i = 0
         while i < len(messages):
             msg = messages[i]
             if isinstance(msg, dict) and msg.get("tool_calls"):
-                tc_ids = {tc["id"] for tc in msg["tool_calls"]}
-                j = i + 1
-                while j < len(messages):
-                    nxt = messages[j]
-                    if isinstance(nxt, dict) and nxt.get("role") == "tool":
-                        tc_ids.discard(nxt.get("tool_call_id", ""))
-                        j += 1
-                    else:
-                        break
-                if tc_ids:
+                tc_ids = {tc.get("id") for tc in msg["tool_calls"]}
+                if not all(tid in tool_ids for tid in tc_ids):
                     logger.debug("上下文清理孤立 tool_calls: %s", tc_ids)
+                    messages.pop(i)
+                    continue
+            i += 1
+        # 2. 清理孤儿 tool 消息（前置 assistant 无包含其 id 的 tool_calls）
+        i = 0
+        while i < len(messages):
+            msg = messages[i]
+            if isinstance(msg, dict) and msg.get("role") == "tool":
+                tid = msg.get("tool_call_id")
+                matched = any(
+                    isinstance(prev, dict) and prev.get("tool_calls")
+                    and any(t.get("id") == tid for t in prev["tool_calls"])
+                    for prev in messages[:i]
+                )
+                if not matched:
+                    logger.debug("上下文清理孤儿 tool 消息: %s", tid)
                     messages.pop(i)
                     continue
             i += 1

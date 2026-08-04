@@ -20,6 +20,24 @@ logger = logging.getLogger("brain_services")
 
 router = APIRouter()
 
+# 同一用户的消息处理互斥锁：保证同一用户/群聊的消息按序处理。
+# 原因：并发 LLM 循环会把中间产物（assistant tool_calls / tool 响应）按写入
+# 完成时刻交错落库，后续请求重读上下文时配对被拆散，产生"孤儿 tool 消息"
+# （tool 无前置 tool_calls assistant）→ DeepSeek 400。串行化后同用户的消息
+# 永远读到干净的上下文序列。
+_user_locks: dict[str, threading.Lock] = {}
+_user_locks_guard = threading.Lock()
+
+
+def _get_user_lock(user_id: str) -> threading.Lock:
+    """获取用户处理锁（懒创建，进程生命周期内复用）"""
+    with _user_locks_guard:
+        lock = _user_locks.get(user_id)
+        if lock is None:
+            lock = threading.Lock()
+            _user_locks[user_id] = lock
+        return lock
+
 
 def _send_wechat_text(who: str, text: str):
     """通过 wechat_gateway 发送文本消息"""
@@ -105,6 +123,13 @@ def _update_wakeword_category(wakeword_id: str, category: str):
 
 def _process_async(req: AgentRequest):
     """后台处理：策略引擎处理 → 推送回复到 gateway"""
+    # 同一用户串行处理（锁内执行整个流程，避免并发 LLM 循环交错写入 DB）
+    with _get_user_lock(req.user_id):
+        _process_async_locked(req)
+
+
+def _process_async_locked(req: AgentRequest):
+    """实际处理（已在用户锁内）"""
     try:
         # 状态：思考中
         who = req.metadata.get("wechat_name", "") or req.user_id
