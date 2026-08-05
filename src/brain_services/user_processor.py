@@ -196,7 +196,7 @@ class UserProcessor:
 
         # 3. 收尾：skip 消息清理追踪
         skipped = result.get("skipped") or []
-        for req, _mid in skipped:
+        for req, _mid, _ocr in skipped:
             self._cleanup_trace(req)
 
         resp = result.get("resp")
@@ -204,7 +204,7 @@ class UserProcessor:
             ai_status.set("idle")
             return
         actionable = result.get("actionable") or []
-        first, _fmid = actionable[0]
+        first, _fmid, _focr = actionable[0]
         self._deliver_merged(first, resp, actionable)
 
     # ---- 收尾 ----
@@ -222,7 +222,7 @@ class UserProcessor:
         meta = {"batch_size": len(others) + 1}
         if error:
             meta["error"] = error
-        for req, _mid in others:
+        for req, _mid, _ocr in others:
             trace_event(req.request_id, "merged", metadata=meta,
                         protocol=req.protocol.value, user_id=req.user_id)
             _trace_reply(req.request_id, skip=True)
