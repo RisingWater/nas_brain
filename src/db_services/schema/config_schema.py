@@ -12,6 +12,8 @@ class UserConfigUpdateRequest(BaseModel):
     group_at_only: Optional[bool] = None
     # batch 合并开关（关闭后队列消息顺序一条一条处理）
     batch_enabled: Optional[bool] = None
+    # 群成员备注（群聊时注入上下文帮助识别消息来源）
+    group_members: Optional[List[dict]] = None
     # OCR
     ocr_image: Optional[bool] = None
     # 表情包
@@ -34,7 +36,8 @@ class UserConfigResponse(BaseModel):
     allowed_processors: Optional[List[str]] = None
     short_term_window: int
     group_at_only: bool
-    batch_enabled: bool = True
+    batch_enabled: bool = False
+    group_members: List[dict] = []
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     # OCR

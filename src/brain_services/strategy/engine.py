@@ -45,7 +45,8 @@ class StrategyEngine:
             "allowed_tools": None,
             "short_term_window": 30,
             "group_at_only": True,
-            "batch_enabled": True,
+            "batch_enabled": False,
+            "group_members": [],
         }
 
     def is_mentioned(self, req: AgentRequest) -> bool:

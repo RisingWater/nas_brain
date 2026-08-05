@@ -9,6 +9,7 @@ export interface UserConfig {
   short_term_window: number;
   group_at_only: boolean;
   batch_enabled: boolean;
+  group_members: { sender: string; remark?: string }[];
   created_at: string | null;
   updated_at: string | null;
   ocr_image: boolean;
@@ -30,6 +31,7 @@ export interface UserConfigUpdate {
   short_term_window?: number;
   group_at_only?: boolean;
   batch_enabled?: boolean;
+  group_members?: { sender: string; remark?: string }[];
   ocr_image?: boolean;
   send_bqb?: boolean;
   bqb_probability?: number;
@@ -64,6 +66,16 @@ export async function getUserConfig(userId: string): Promise<UserConfig> {
 
 export async function updateUserConfig(userId: string, payload: UserConfigUpdate): Promise<void> {
   await client.put(`/admin/user-configs/${userId}`, payload);
+}
+
+export interface MemberCandidate {
+  sender: string;
+  count: number;
+}
+
+export async function getMemberCandidates(userId: string): Promise<MemberCandidate[]> {
+  const { data } = await client.get(`/admin/user-configs/${userId}/member-candidates`);
+  return data.items;
 }
 
 export async function listUsers(): Promise<any[]> {

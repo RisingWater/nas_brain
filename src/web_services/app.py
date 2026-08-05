@@ -325,6 +325,11 @@ async def proxy_user_configs_detail(user_id: str, request: Request):
     return await _proxy_to_db(f"/api/user-configs/{user_id}", request)
 
 
+@app.api_route("/api/admin/user-configs/{user_id}/member-candidates", methods=["GET"])
+async def proxy_member_candidates(user_id: str, request: Request):
+    return await _proxy_to_db(f"/api/user-configs/{user_id}/member-candidates", request)
+
+
 @app.api_route("/api/admin/chat-messages/single/{msg_id}", methods=["DELETE"])
 async def proxy_chat_messages_single(msg_id: int, request: Request):
     return await _proxy_to_db(f"/api/chat-messages/single/{msg_id}", request)

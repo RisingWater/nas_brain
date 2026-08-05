@@ -131,7 +131,7 @@ class UserProcessor:
                 if req is None:  # stop 哨兵
                     break
                 config = self._engine.get_user_config(self.user_id)
-                if config.get("strategy") != "smart" or not config.get("batch_enabled", True):
+                if config.get("strategy") != "smart" or not config.get("batch_enabled", False):
                     # direct/ignore 或用户关闭 batch：顺序一条一条处理
                     self._process_single(req)
                     continue
