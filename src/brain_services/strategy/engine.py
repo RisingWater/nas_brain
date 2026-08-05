@@ -218,8 +218,7 @@ class StrategyEngine:
 
         resp = self._process_smart(first, config, user_msg_id=None,
                                    exclude_msg_ids=exclude_ids or None,
-                                   content_override=merged_content,
-                                   skip_check=False)
+                                   content_override=merged_content)
         return {"resp": resp, "actionable": actionable, "skipped": skipped}
 
     def _process_smart(self, req: AgentRequest, config: dict,
