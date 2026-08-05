@@ -141,8 +141,10 @@ class StrategyEngine:
     def process_batch(self, reqs: list[AgentRequest], config: dict) -> dict:
         """批量链路（smart + wechat 批次，与 process() 单条链路完全独立）
 
-        流程：逐条记录 → 图片 OCR 转文字 → 按 @ 模式分组 → 合并成一个
-        提示词一次 LLM。合并批内消息的 DB 记录在构建上下文时排除。
+        流程：逐条记录 → 图片 OCR 转文字 → 按 @ 模式分组 → 文字消息合并成
+        一个提示词一次 LLM。合并的纯文字消息在构建上下文时排除（避免重复）；
+        图片消息内容（含 OCR 结果，已写入聊天记录）保留在上下文中由
+        context_builder 注入。
 
         两种配置：
         - group_at_only=True（群聊只回复 @）：抽取 @ 消息构建提示词，
@@ -183,23 +185,36 @@ class StrategyEngine:
             return {"resp": None, "actionable": [], "skipped": skipped}
 
         # 3. 全部合并成一个提示词（N>=1，1 条等价单条）
-        first, _fmid, _ocr = actionable[0]
+        #    图片消息不拼进提示词：OCR 结果已在第 1 步写入聊天记录，
+        #    由 context_builder 作为历史消息注入上下文（因此也不排除）
         lines = []
-        for req, _mid, ocr_text in actionable:
+        exclude_ids = []
+        for req, mid, ocr_text in actionable:
+            if ocr_text:
+                continue  # 图片消息：内容走聊天记录，不参与合并
             sender = (req.metadata or {}).get("sender", "") if hasattr(req, "metadata") else ""
             content = req.content or ""
-            if ocr_text:
-                content = f"{content}\n【OCR识别结果】\n{ocr_text}"
             if is_group and sender:
                 lines.append(f"{sender}: {content}")
+            elif is_group:
+                # 兜底：群聊 sender 缺失（备注为空）时也标明来源
+                lines.append(f"群友: {content}")
             else:
                 lines.append(content)
+            if mid:
+                exclude_ids.append(mid)
+        if not lines:
+            # 批内没有可合并的文字（全是图片）→ 全部跳过不回复，
+            # 与单条链路"图片 OCR 后 skip"行为一致（OCR 结果已写入聊天记录）
+            logger.info("用户 %s 批内无可合并文字，全部跳过 (%d 条)",
+                        user_id, len(items))
+            return {"resp": None, "actionable": [], "skipped": items}
+        first, _fmid, _ocr = actionable[0]
         merged_content = "\n".join(lines)
         logger.info("用户 %s 合并处理 %d 条消息 (@模式=%s)",
                     user_id, len(actionable), group_at_only)
         logger.info("合并 content: %s", merged_content)
 
-        exclude_ids = [mid for _req, mid, _ocr in actionable if mid]
         resp = self._process_smart(first, config, user_msg_id=None,
                                    exclude_msg_ids=exclude_ids or None,
                                    content_override=merged_content,
@@ -213,8 +228,9 @@ class StrategyEngine:
         """Smart 模式：LLM + 工具调用
 
         Args:
-            content_override: 合并文本（多条 @ 拼成一条 user 消息，已带 sender 前缀）
-            exclude_msg_ids: 排除的原始消息 ID（合并批内全部，避免上下文重复）
+            content_override: 合并文本（多条文字消息拼成一条 user 消息，已带 sender 前缀）
+            exclude_msg_ids: 排除的原始消息 ID（内容已并入提示词的批内文字消息，
+                避免上下文重复；图片消息靠聊天记录注入，不在此列）
         """
         # 非文字消息（无 processor 处理的情况下）LLM 无法处理，直接跳过；
         # 合并模式 content_override 已是文本（图片已 OCR 转文字），不检查

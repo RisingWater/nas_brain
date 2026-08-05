@@ -162,8 +162,12 @@ class LLMContextBuilder:
                             except Exception:
                                 msg_meta = {}
                         sender = msg_meta.get("sender", "") if isinstance(msg_meta, dict) else ""
+                        raw_type = msg_meta.get("raw_chat_type", "") if isinstance(msg_meta, dict) else ""
                         if sender and role == "user":
                             content = f"{sender}: {content}"
+                        elif role == "user" and raw_type == "group":
+                            # 兜底：群聊 sender 缺失（备注为空/老数据）时也标明来源
+                            content = f"群友: {content}"
                         entry = {
                             "role": role,
                             "content": content,
