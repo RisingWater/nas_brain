@@ -15,6 +15,7 @@ _DEFAULT = {
     "allowed_processors": None,
     "short_term_window": 30,
     "group_at_only": True,
+    "batch_enabled": True,
     "ocr_image": False,
     "send_bqb": False,
     "bqb_probability": 50,
@@ -52,6 +53,12 @@ def _init_table():
     # 兼容：添加 OCR 开关列
     try:
         conn.execute("ALTER TABLE user_configs ADD COLUMN ocr_image INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass
+    # 兼容：添加 batch 合并开关列（关闭后队列消息顺序一条一条处理）
+    try:
+        conn.execute("ALTER TABLE user_configs ADD COLUMN batch_enabled INTEGER DEFAULT 1")
         conn.commit()
     except Exception:
         pass
@@ -95,6 +102,7 @@ def _row_to_dict(row) -> dict:
         "allowed_processors": json.loads(row["allowed_processors"]) if row["allowed_processors"] else None,
         "short_term_window": row["short_term_window"] or 30,
         "group_at_only": bool(row["group_at_only"]) if row["group_at_only"] is not None else True,
+        "batch_enabled": bool(row["batch_enabled"]) if row["batch_enabled"] is not None else True,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "ocr_image": bool(row["ocr_image"]) if row["ocr_image"] is not None else False,

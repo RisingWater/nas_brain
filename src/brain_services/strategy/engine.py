@@ -45,6 +45,7 @@ class StrategyEngine:
             "allowed_tools": None,
             "short_term_window": 30,
             "group_at_only": True,
+            "batch_enabled": True,
         }
 
     def is_mentioned(self, req: AgentRequest) -> bool:
@@ -75,14 +76,14 @@ class StrategyEngine:
         return config.get("strategy", "smart")
 
     def process(self, req: AgentRequest) -> AgentResponse:
-        """主入口：判断策略 → 处理 → 返回"""
-        # 0. 获取配置
-        config = self.get_user_config(req.user_id)
+        """完整单条链路：获取配置 → 记录消息 → 跳过判断 → 策略分流
 
-        # 1. 先记录消息到 DB（即使后续跳过也要记录，供上下文使用）
+        覆盖 smart（含 IMAGE OCR）/ direct（processor）/ ignore 全部分支。
+        """
+        config = self.get_user_config(req.user_id)
         user_msg_id = self.recorder.record_user_message(req)
 
-        # 2. 检查是否跳过（群聊无 @）
+        # 检查是否跳过（群聊无 @）
         if self.should_skip(req, config):
             return AgentResponse(data={
                 "request_id": req.request_id,
@@ -90,7 +91,7 @@ class StrategyEngine:
                 "skipped": True,
             })
 
-        # 3. 获取策略（voice 强制 smart）
+        # 获取策略（voice 强制 smart）
         strategy = self.get_strategy(req, config)
         if strategy == "ignore":
             logger.info("Ignore 策略，跳过处理: %.50s", req.content or "")
@@ -100,9 +101,8 @@ class StrategyEngine:
                 "ignored": True,
             })
 
-        # 4. 按策略分流：smart → LLM，direct → processor
+        # smart：IMAGE + ocr_image 配置 → OCR 识别，存历史，不回复
         if strategy == "smart":
-            # Smart + IMAGE：OCR 识别，存历史，不回复
             if req.content_type == ContentType.IMAGE and req.file_id and config.get("ocr_image"):
                 ocr_text = self._ocr_image(req)
                 if ocr_text:
@@ -138,10 +138,87 @@ class StrategyEngine:
                 logger.error("Processor %s 异常: %s", processor.name, e, exc_info=True)
         return self._process_direct(req)
 
-    def _process_smart(self, req: AgentRequest, config: dict, user_msg_id: int | None = None) -> AgentResponse:
-        """Smart 模式：LLM + 工具调用"""
-        # 非文字消息（无 processor 处理的情况下）LLM 无法处理，直接跳过
-        if req.content_type != ContentType.TEXT:
+    def process_batch(self, reqs: list[AgentRequest], config: dict) -> dict:
+        """批量链路（smart + wechat 批次，与 process() 单条链路完全独立）
+
+        流程：逐条记录 → 图片 OCR 转文字 → 按 @ 模式分组 → 合并成一个
+        提示词一次 LLM。合并批内消息的 DB 记录在构建上下文时排除。
+
+        两种配置：
+        - group_at_only=True（群聊只回复 @）：抽取 @ 消息构建提示词，
+          非 @ 消息只记录（skip 不回复）
+        - group_at_only=False（答复所有消息）：全部可答复消息
+          （文字 + OCR 成功的图片）合并成一个提示词
+
+        Returns:
+            {"resp": AgentResponse | None,   # None = 无可处理消息（全部跳过）
+             "actionable": [(req, msg_id)],  # 参与合并的消息（第一条为主请求）
+             "skipped": [(req, msg_id)]}     # 只记录不回复的消息
+        """
+        user_id = reqs[0].user_id
+        is_group = reqs[0].chat_type.value == "group"
+        group_at_only = config.get("group_at_only", True)
+
+        # 1. 逐条记录 + 图片先 OCR（smart 模式图片本质是转文字处理）
+        items = []  # (req, msg_id, ocr_text)
+        for req in reqs:
+            msg_id = self.recorder.record_user_message(req)
+            ocr_text = ""
+            if (req.content_type == ContentType.IMAGE and req.file_id
+                    and config.get("ocr_image")):
+                ocr_text = self._ocr_image(req) or ""
+                if ocr_text:
+                    updated = f"{req.content or ''}\n【OCR识别结果】\n{ocr_text}"
+                    self.recorder.update_content(msg_id, updated)
+            items.append((req, msg_id, ocr_text))
+
+        # 2. 分组：@ 模式只取 @ 消息；否则全部可答复消息
+        if is_group and group_at_only:
+            actionable = [it for it in items if self.is_mentioned(it[0])]
+        else:
+            actionable = [it for it in items
+                          if it[0].content_type == ContentType.TEXT or it[2]]
+        skipped = [it for it in items if it not in actionable]
+        if not actionable:
+            return {"resp": None, "actionable": [], "skipped": skipped}
+
+        # 3. 全部合并成一个提示词（N>=1，1 条等价单条）
+        first, _fmid, _ocr = actionable[0]
+        lines = []
+        for req, _mid, ocr_text in actionable:
+            sender = (req.metadata or {}).get("sender", "") if hasattr(req, "metadata") else ""
+            content = req.content or ""
+            if ocr_text:
+                content = f"{content}\n【OCR识别结果】\n{ocr_text}"
+            if is_group and sender:
+                lines.append(f"{sender}: {content}")
+            else:
+                lines.append(content)
+        merged_content = "\n".join(lines)
+        logger.info("用户 %s 合并处理 %d 条消息 (@模式=%s)",
+                    user_id, len(actionable), group_at_only)
+        logger.info("合并 content: %s", merged_content)
+
+        exclude_ids = [mid for _req, mid, _ocr in actionable if mid]
+        resp = self._process_smart(first, config, user_msg_id=None,
+                                   exclude_msg_ids=exclude_ids or None,
+                                   content_override=merged_content,
+                                   skip_check=False)
+        return {"resp": resp, "actionable": actionable, "skipped": skipped}
+
+    def _process_smart(self, req: AgentRequest, config: dict,
+                       user_msg_id: int | None = None,
+                       exclude_msg_ids: list[int] | None = None,
+                       content_override: str | None = None) -> AgentResponse:
+        """Smart 模式：LLM + 工具调用
+
+        Args:
+            content_override: 合并文本（多条 @ 拼成一条 user 消息，已带 sender 前缀）
+            exclude_msg_ids: 排除的原始消息 ID（合并批内全部，避免上下文重复）
+        """
+        # 非文字消息（无 processor 处理的情况下）LLM 无法处理，直接跳过；
+        # 合并模式 content_override 已是文本（图片已 OCR 转文字），不检查
+        if content_override is None and req.content_type != ContentType.TEXT:
             logger.info("非文字消息跳过 LLM: content_type=%s", req.content_type.value)
             return AgentResponse(data={
                 "request_id": req.request_id,
@@ -149,16 +226,21 @@ class StrategyEngine:
                 "skipped": True,
             })
 
-        # 构建上下文
+        # 合并模式用合并文本作为当前消息；单条用原内容
+        current_msg = content_override if content_override is not None else (req.content or "")
+        exclude_ids = exclude_msg_ids if exclude_msg_ids is not None else (
+            [user_msg_id] if user_msg_id else None)
+
+        # 构建上下文（合并文本已带 sender 前缀，不再重复加）
         sender = (req.metadata or {}).get("sender", "") if hasattr(req, 'metadata') else ""
         messages = self.context_builder.build(
             user_id=req.user_id,
             config=config,
-            current_msg=req.content or "",
+            current_msg=current_msg,
             protocol=req.protocol.value if hasattr(req.protocol, 'value') else str(req.protocol),
             chat_type=req.chat_type.value if hasattr(req.chat_type, 'value') else str(req.chat_type),
-            exclude_msg_id=user_msg_id,
-            sender=sender,
+            exclude_msg_ids=exclude_ids,
+            sender=sender if content_override is None else "",
         )
 
         # 过滤工具
@@ -168,7 +250,7 @@ class StrategyEngine:
         )
 
         # 状态：思考中（agent.py 已设，此处确保有内容）
-        ai_status.set("thinking", message=req.content[:80] if req.content else "")
+        ai_status.set("thinking", message=current_msg[:80])
 
         # 执行 LLM 循环
         # 仅语音启用 final 属性（VAD 收录短 + TTS 慢，延迟敏感）；
@@ -184,7 +266,8 @@ class StrategyEngine:
         req.metadata["prompt_tokens"] = req_tokens.get("prompt_tokens", 0)
         req.metadata["completion_tokens"] = req_tokens.get("completion_tokens", 0)
 
-        # __SKIP__：不回复，按 user_msg_id 删除该条消息
+        # __SKIP__：不回复，按 user_msg_id 删除该条消息（仅单条路径；
+        # 合并模式 user_msg_id=None，批内是他人真实消息，不删除）
         if reply and reply.strip() == "__SKIP__":
             logger.info("LLM 返回 __SKIP__，跳过并删除消息 msg_id=%s", user_msg_id)
             if user_msg_id:

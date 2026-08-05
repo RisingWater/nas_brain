@@ -57,6 +57,7 @@ export default function UserConfigDetail() {
           allowed_processors: config.allowed_processors || [],
           short_term_window: config.short_term_window,
           group_at_only: config.group_at_only,
+          batch_enabled: config.batch_enabled ?? true,
           ocr_image: config.ocr_image ?? false,
           send_bqb: config.send_bqb ?? false,
           bqb_probability: config.bqb_probability ?? 50,
@@ -88,6 +89,7 @@ export default function UserConfigDetail() {
         allowed_processors: values.strategy === 'direct' ? (values.allowed_processors?.length ? values.allowed_processors : null) : null,
         short_term_window: values.short_term_window,
         group_at_only: userInfo?.user_type === 'group' ? values.group_at_only : undefined,
+        batch_enabled: values.batch_enabled,
         ocr_image: values.ocr_image,
         send_bqb: values.send_bqb,
         bqb_probability: values.bqb_probability,
@@ -206,6 +208,11 @@ export default function UserConfigDetail() {
 
       <Form.Item name="short_term_window" label="短期记忆窗口（分钟）" rules={[{ required: true }]}>
         <InputNumber min={5} max={1440} style={{ width: 200 }} />
+      </Form.Item>
+
+      <Form.Item name="batch_enabled" label="批量合并处理" valuePropName="checked"
+                 tooltip="开启后队列中积累的多条消息合并为一个提示词一次处理；关闭则顺序一条一条处理">
+        <Switch />
       </Form.Item>
 
       <Form.Item name="ocr_image" label="图片自动 OCR 识别" valuePropName="checked"

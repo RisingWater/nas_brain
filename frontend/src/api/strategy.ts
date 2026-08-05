@@ -8,6 +8,7 @@ export interface UserConfig {
   allowed_processors: string[] | null;
   short_term_window: number;
   group_at_only: boolean;
+  batch_enabled: boolean;
   created_at: string | null;
   updated_at: string | null;
   ocr_image: boolean;
@@ -28,6 +29,7 @@ export interface UserConfigUpdate {
   allowed_processors?: string[] | null;
   short_term_window?: number;
   group_at_only?: boolean;
+  batch_enabled?: boolean;
   ocr_image?: boolean;
   send_bqb?: boolean;
   bqb_probability?: number;

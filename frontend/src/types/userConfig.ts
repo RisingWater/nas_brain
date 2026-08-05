@@ -5,6 +5,7 @@ export interface UserConfig {
   allowed_tools: string[] | null;
   short_term_window: number;
   group_at_only: boolean;
+  batch_enabled: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -15,4 +16,5 @@ export interface UserConfigUpdate {
   allowed_tools?: string[] | null;
   short_term_window?: number;
   group_at_only?: boolean;
+  batch_enabled?: boolean;
 }
