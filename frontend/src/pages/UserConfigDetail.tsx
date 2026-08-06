@@ -100,8 +100,8 @@ export default function UserConfigDetail() {
         short_term_window: values.short_term_window,
         group_at_only: userInfo?.user_type === 'group' ? values.group_at_only : undefined,
         batch_enabled: values.batch_enabled,
-        ...(userInfo?.user_type === 'group' ? {
-          group_members: values.group_members || [],
+        ...(userInfo?.user_type === 'group' && values.group_members !== undefined ? {
+          group_members: values.group_members,
         } : {}),
         ocr_image: values.ocr_image,
         send_bqb: values.send_bqb,
@@ -408,7 +408,7 @@ export default function UserConfigDetail() {
           <Tabs items={[
             { key: 'basic', label: '基础配置', children: basicTab },
             ...(userInfo?.user_type === 'group' ? [
-              { key: 'members', label: '群成员备注', children: membersTab },
+              { key: 'members', label: '群成员备注', children: membersTab, forceRender: true },
             ] : []),
             { key: 'proactive', label: '主动发言', children: proactiveTab },
           ]} />
