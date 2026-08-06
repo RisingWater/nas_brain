@@ -83,23 +83,7 @@ class LLMContextBuilder:
         if ctx_parts:
             messages.append({"role": "system", "content": " ".join(ctx_parts)})
 
-        # 2. Long-term memory (memory.md)
-        long_term = _read_long_term_memory()
-        if long_term:
-            messages.append({
-                "role": "system",
-                "content": f"【长期记忆】\n{long_term}\n（以上是长期记忆，由你维护的事实列表）",
-            })
-
-        # 3. Mid-term memory (chat_summaries)
-        mid_term = self._get_mid_term_summary(user_id)
-        if mid_term:
-            messages.append({
-                "role": "system",
-                "content": f"【历史对话总结】\n{mid_term}",
-            })
-
-        # 3b. 群成员备注（群聊时注入，帮助 AI 识别消息来源人物）
+        # 1c. 群成员备注（群聊时注入，放在所有记忆之前，人物认知优先级最高）
         members = config.get("group_members") or []
         if members and chat_type == "group":
             m_lines = []
@@ -116,6 +100,22 @@ class LLMContextBuilder:
                     "role": "system",
                     "content": "【群成员备注】\n" + "\n".join(m_lines),
                 })
+
+        # 2. Long-term memory (memory.md)
+        long_term = _read_long_term_memory()
+        if long_term:
+            messages.append({
+                "role": "system",
+                "content": f"【长期记忆】\n{long_term}\n（以上是长期记忆，由你维护的事实列表）",
+            })
+
+        # 3. Mid-term memory (chat_summaries)
+        mid_term = self._get_mid_term_summary(user_id)
+        if mid_term:
+            messages.append({
+                "role": "system",
+                "content": f"【历史对话总结】\n{mid_term}",
+            })
 
         # 4. Short-term memory (recent chat_messages)
         window_minutes = config.get("short_term_window", 30)
