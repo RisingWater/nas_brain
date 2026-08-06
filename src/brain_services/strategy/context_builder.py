@@ -29,9 +29,14 @@ class LLMContextBuilder:
 
     def build(self, user_id: str, config: dict, current_msg: str,
               protocol: str = "wechat", chat_type: str = "private",
-              exclude_msg_id: int | None = None,
+              exclude_msg_ids: list[int] | None = None,
               sender: str = "") -> list[dict]:
-        """构建 OpenAI-format messages 列表"""
+        """构建 OpenAI-format messages 列表
+
+        Args:
+            exclude_msg_ids: 排除的聊天记录 ID 列表（如合并批内已并入
+                current_msg 的多条原始消息，避免上下文重复）
+        """
         messages = []
 
         # 1. System prompt
@@ -78,6 +83,24 @@ class LLMContextBuilder:
         if ctx_parts:
             messages.append({"role": "system", "content": " ".join(ctx_parts)})
 
+        # 1c. 群成员备注（群聊时注入，放在所有记忆之前，人物认知优先级最高）
+        members = config.get("group_members") or []
+        if members and chat_type == "group":
+            m_lines = []
+            for m in members:
+                if not isinstance(m, dict):
+                    continue
+                sender = (m.get("sender") or "").strip()
+                if not sender:
+                    continue
+                remark = (m.get("remark") or "").strip()
+                m_lines.append(f"{sender}: {remark}" if remark else sender)
+            if m_lines:
+                messages.append({
+                    "role": "system",
+                    "content": "【群成员备注】\n" + "\n".join(m_lines),
+                })
+
         # 2. Long-term memory (memory.md)
         long_term = _read_long_term_memory()
         if long_term:
@@ -96,7 +119,7 @@ class LLMContextBuilder:
 
         # 4. Short-term memory (recent chat_messages)
         window_minutes = config.get("short_term_window", 30)
-        short_term = self._get_short_term_history(user_id, window_minutes, exclude_msg_id)
+        short_term = self._get_short_term_history(user_id, window_minutes, exclude_msg_ids)
         for msg in short_term:
             messages.append(msg)
 
@@ -126,8 +149,8 @@ class LLMContextBuilder:
         return None
 
     def _get_short_term_history(self, user_id: str, window_minutes: int,
-                                 exclude_id: int | None = None) -> list[dict]:
-        """获取短期记忆（最近 N 分钟内的消息），可选排除某条 ID"""
+                                 exclude_ids: list[int] | None = None) -> list[dict]:
+        """获取短期记忆（最近 N 分钟内的消息），可选排除若干条 ID"""
         try:
             url = cfg.get_service_url("db_services", f"/api/chat-messages/{user_id}")
             import datetime
@@ -144,7 +167,7 @@ class LLMContextBuilder:
                              [m.get("id") for m in data.get("messages", [])])
                 result = []
                 for msg in data.get("messages", []):
-                    if exclude_id is not None and msg.get("id") == exclude_id:
+                    if exclude_ids and msg.get("id") in exclude_ids:
                         continue
                     role = msg.get("role", "")
                     if role in ("user", "assistant"):
@@ -157,8 +180,12 @@ class LLMContextBuilder:
                             except Exception:
                                 msg_meta = {}
                         sender = msg_meta.get("sender", "") if isinstance(msg_meta, dict) else ""
+                        raw_type = msg_meta.get("raw_chat_type", "") if isinstance(msg_meta, dict) else ""
                         if sender and role == "user":
                             content = f"{sender}: {content}"
+                        elif role == "user" and raw_type == "group":
+                            # 兜底：群聊 sender 缺失（备注为空/老数据）时也标明来源
+                            content = f"群友: {content}"
                         entry = {
                             "role": role,
                             "content": content,

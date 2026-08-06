@@ -6,12 +6,10 @@ os.environ["LOG_SERVER_NAME"] = "brain_services"
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from src.common.utils import log_manager
-from .routes import agent, tools_mgmt, processors_mgmt, strategy_mgmt, status
+from .routes import agent, tools_mgmt, processors_mgmt, strategy_mgmt, status, ice_breaker as ice_breaker_route
 from .tools.plugin_manager import load_tools
 from .processors.plugin_manager import load_all as load_processors
-from .strategy.summarizer import summarizer
-from .ice_breaker import ice_breaker_engine
-from .routes import ice_breaker as ice_breaker_route
+from .user_processor import manager
 
 logger = logging.getLogger("brain_services")
 
@@ -24,14 +22,10 @@ async def lifespan(app: FastAPI):
     logger.info("加载处理器...")
     pcount = load_processors()
     logger.info("处理器加载完成: %d 个", pcount)
-    # 启动中期记忆总结器（30 分钟间隔）
-    summarizer.start(interval_seconds=1800)
-    # 启动主动发言引擎
-    ice_breaker_engine.start()
-    ice_breaker_route.set_engine(ice_breaker_engine)
+    # 启动用户处理器管理器（每用户：消息处理 + 记忆总结 + 主动发言）
+    manager.start()
     yield
-    ice_breaker_engine.stop()
-    summarizer.stop()
+    manager.stop()
 
 
 app = FastAPI(title="大脑微服务", version="1.0.0", lifespan=lifespan)

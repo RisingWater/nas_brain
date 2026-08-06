@@ -3,14 +3,14 @@ import {
   Typography, Button, Space, Card, Descriptions, Tag, Form, message,
   Radio, Input, InputNumber, Switch, Transfer, Spin, Tabs,
 } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, ThunderboltOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { TransferItem } from 'antd/es/transfer';
 import {
   getUserConfig, updateUserConfig, listUsers, listTools, listProcessors,
-  triggerIceBreaker,
+  triggerIceBreaker, getMemberCandidates,
 } from '../api/strategy';
-import type { UserConfigUpdate, ToolInfo, ProcessorInfo } from '../api/strategy';
+import type { UserConfigUpdate, ToolInfo, ProcessorInfo, MemberCandidate } from '../api/strategy';
 
 const { Text } = Typography;
 const DEFAULT_SYSTEM_PROMPT = '你是 NAS Brain，一个智能助手。请用中文回答用户的问题。';
@@ -25,6 +25,7 @@ export default function UserConfigDetail() {
   const [testing, setTesting] = useState(false);
   const [allTools, setAllTools] = useState<TransferItem[]>([]);
   const [allProcessors, setAllProcessors] = useState<TransferItem[]>([]);
+  const [candidates, setCandidates] = useState<MemberCandidate[]>([]);
   const [form] = Form.useForm();
 
   const hasWechat = !!(userInfo?.wechat_name);
@@ -43,6 +44,14 @@ export default function UserConfigDetail() {
 
         const user = users.find((u: any) => u.user_id === userId);
         setUserInfo(user || null);
+        // 群聊：加载从聊天记录提取的成员候选
+        if (user?.user_type === 'group') {
+          try {
+            setCandidates(await getMemberCandidates(userId));
+          } catch {
+            setCandidates([]);
+          }
+        }
         setAllTools(
           tools.map((t: ToolInfo) => ({ key: t.name, title: t.name, description: t.description })),
         );
@@ -57,6 +66,8 @@ export default function UserConfigDetail() {
           allowed_processors: config.allowed_processors || [],
           short_term_window: config.short_term_window,
           group_at_only: config.group_at_only,
+          batch_enabled: config.batch_enabled ?? false,
+          group_members: config.group_members || [],
           ocr_image: config.ocr_image ?? false,
           send_bqb: config.send_bqb ?? false,
           bqb_probability: config.bqb_probability ?? 50,
@@ -88,6 +99,10 @@ export default function UserConfigDetail() {
         allowed_processors: values.strategy === 'direct' ? (values.allowed_processors?.length ? values.allowed_processors : null) : null,
         short_term_window: values.short_term_window,
         group_at_only: userInfo?.user_type === 'group' ? values.group_at_only : undefined,
+        batch_enabled: values.batch_enabled,
+        ...(userInfo?.user_type === 'group' && values.group_members !== undefined ? {
+          group_members: values.group_members,
+        } : {}),
         ocr_image: values.ocr_image,
         send_bqb: values.send_bqb,
         bqb_probability: values.bqb_probability,
@@ -108,6 +123,13 @@ export default function UserConfigDetail() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const addCandidate = (sender: string) => {
+    const cur = form.getFieldValue('group_members') || [];
+    if (cur.some((m: any) => m?.sender === sender)) return;
+    form.setFieldsValue({ group_members: [...cur, { sender, remark: '' }] });
+    setCandidates((prev) => prev.filter((c) => c.sender !== sender));
   };
 
   const handleTestTrigger = async () => {
@@ -208,6 +230,11 @@ export default function UserConfigDetail() {
         <InputNumber min={5} max={1440} style={{ width: 200 }} />
       </Form.Item>
 
+      <Form.Item name="batch_enabled" label="批量合并处理" valuePropName="checked"
+                 tooltip="开启后队列中积累的多条消息合并为一个提示词一次处理；关闭则顺序一条一条处理">
+        <Switch />
+      </Form.Item>
+
       <Form.Item name="ocr_image" label="图片自动 OCR 识别" valuePropName="checked"
                  tooltip="收到图片时自动识别其中的文字，结果补充到消息内容中">
         <Switch />
@@ -229,6 +256,54 @@ export default function UserConfigDetail() {
         }}
       </Form.Item>
     </>
+  );
+
+  const membersTab = userInfo?.user_type === 'group' ? (
+    <>
+      <Form.List name="group_members">
+        {(fields, { add, remove }) => (
+          <>
+            {fields.map(({ key, name, ...restField }) => (
+              <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                <Form.Item {...restField} name={[name, 'sender']}
+                           rules={[{ required: true, message: '必填' }]}
+                           style={{ marginBottom: 0 }}>
+                  <Input placeholder="群成员昵称（与微信备注一致）" style={{ width: 240 }} />
+                </Form.Item>
+                <Form.Item {...restField} name={[name, 'remark']} style={{ marginBottom: 0 }}>
+                  <Input placeholder="备注：外号、职业、个性等，一两句话" style={{ width: 420 }} />
+                </Form.Item>
+                <Button icon={<DeleteOutlined />} onClick={() => remove(name)} />
+              </Space>
+            ))}
+            <Button type="dashed" onClick={() => add()} icon={<PlusOutlined />} block>
+              添加成员
+            </Button>
+          </>
+        )}
+      </Form.List>
+      <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+        群成员备注会随历史对话总结一起注入提示词，AI 识别群消息来源时更准确（如外号、职业、与你的关系）。
+      </Text>
+
+      <Card size="small" title="从聊天记录提取（备选）" style={{ marginTop: 16 }}>
+        {candidates.length === 0 ? (
+          <Text type="secondary">暂无候选 — 群成员发消息时（带备注）会自动出现在这里，可一键添加</Text>
+        ) : (
+          candidates.map((c) => (
+            <Space key={c.sender} style={{ display: 'flex', marginBottom: 6 }} align="center">
+              <Text>{c.sender}</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>出现 {c.count} 次</Text>
+              <Button size="small" icon={<PlusOutlined />} onClick={() => addCandidate(c.sender)}>
+                添加
+              </Button>
+            </Space>
+          ))
+        )}
+      </Card>
+    </>
+  ) : (
+    <Text type="secondary">仅群聊用户可配置群成员备注。</Text>
   );
 
   const proactiveTab = hasWechat ? (
@@ -332,6 +407,9 @@ export default function UserConfigDetail() {
               }}>
           <Tabs items={[
             { key: 'basic', label: '基础配置', children: basicTab },
+            ...(userInfo?.user_type === 'group' ? [
+              { key: 'members', label: '群成员备注', children: membersTab, forceRender: true },
+            ] : []),
             { key: 'proactive', label: '主动发言', children: proactiveTab },
           ]} />
         </Form>

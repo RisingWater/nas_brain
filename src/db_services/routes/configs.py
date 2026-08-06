@@ -15,6 +15,8 @@ _DEFAULT = {
     "allowed_processors": None,
     "short_term_window": 30,
     "group_at_only": True,
+    "batch_enabled": False,
+    "group_members": [],
     "ocr_image": False,
     "send_bqb": False,
     "bqb_probability": 50,
@@ -55,6 +57,18 @@ def _init_table():
         conn.commit()
     except Exception:
         pass
+    # 兼容：添加 batch 合并开关列（默认关闭，开启后队列消息合并处理）
+    try:
+        conn.execute("ALTER TABLE user_configs ADD COLUMN batch_enabled INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass
+    # 兼容：添加群成员备注列（JSON: [{"sender": "...", "remark": "..."}]）
+    try:
+        conn.execute("ALTER TABLE user_configs ADD COLUMN group_members TEXT DEFAULT '[]'")
+        conn.commit()
+    except Exception:
+        pass
     # 兼容：添加表情包列
     try:
         conn.execute("ALTER TABLE user_configs ADD COLUMN send_bqb INTEGER DEFAULT 0")
@@ -86,6 +100,17 @@ def _init_table():
 _init_table()
 
 
+def _parse_json_list(raw) -> list:
+    """解析 JSON 数组列（空/损坏时返回空列表）"""
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
 def _row_to_dict(row) -> dict:
     return {
         "user_id": row["user_id"] or "",
@@ -95,6 +120,8 @@ def _row_to_dict(row) -> dict:
         "allowed_processors": json.loads(row["allowed_processors"]) if row["allowed_processors"] else None,
         "short_term_window": row["short_term_window"] or 30,
         "group_at_only": bool(row["group_at_only"]) if row["group_at_only"] is not None else True,
+        "batch_enabled": bool(row["batch_enabled"]) if row["batch_enabled"] is not None else False,
+        "group_members": _parse_json_list(row["group_members"]),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "ocr_image": bool(row["ocr_image"]) if row["ocr_image"] is not None else False,
@@ -151,6 +178,51 @@ def get_user_config(user_id: str):
     return UserConfigResponse(**_row_to_dict(row))
 
 
+@router.get("/{user_id}/member-candidates")
+def get_member_candidates(user_id: str, limit: int = 1000):
+    """从聊天记录提取未记录的群成员（备选，供前端一键添加）
+
+    遍历最近聊天记录中 user 角色的 metadata.sender，排除已配置的
+    群成员备注，按出现次数排序返回。
+    """
+    conn = db.get_connection()
+    # 已配置的 sender
+    configured = set()
+    cfg_row = conn.execute(
+        "SELECT group_members FROM user_configs WHERE user_id = ?", (user_id,),
+    ).fetchone()
+    if cfg_row and cfg_row["group_members"]:
+        try:
+            for m in json.loads(cfg_row["group_members"]):
+                if isinstance(m, dict) and m.get("sender"):
+                    configured.add(m["sender"].strip())
+        except Exception:
+            pass
+    # 统计聊天记录中未配置的 sender
+    rows = conn.execute(
+        """SELECT metadata FROM chat_messages
+           WHERE user_id = ? AND role = 'user'
+           ORDER BY id DESC LIMIT ?""",
+        (user_id, limit),
+    ).fetchall()
+    counter: dict[str, int] = {}
+    for r in rows:
+        try:
+            meta = json.loads(r["metadata"] or "{}")
+        except Exception:
+            continue
+        if not isinstance(meta, dict):
+            continue
+        sender = (meta.get("sender") or "").strip()
+        if sender and sender not in configured:
+            counter[sender] = counter.get(sender, 0) + 1
+    items = sorted(
+        ({"sender": s, "count": c} for s, c in counter.items()),
+        key=lambda x: -x["count"],
+    )
+    return {"items": items}
+
+
 @router.put("/{user_id}")
 def update_user_config(user_id: str, req: UserConfigUpdateRequest):
     """更新/创建用户配置"""
@@ -177,6 +249,12 @@ def update_user_config(user_id: str, req: UserConfigUpdateRequest):
     if req.group_at_only is not None:
         fields.append("group_at_only = ?")
         values.append(1 if req.group_at_only else 0)
+    if req.batch_enabled is not None:
+        fields.append("batch_enabled = ?")
+        values.append(1 if req.batch_enabled else 0)
+    if req.group_members is not None:
+        fields.append("group_members = ?")
+        values.append(json.dumps(req.group_members, ensure_ascii=False))
     if req.ocr_image is not None:
         fields.append("ocr_image = ?")
         values.append(1 if req.ocr_image else 0)

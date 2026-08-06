@@ -2,17 +2,11 @@
 import logging
 from pydantic import BaseModel, Field
 from fastapi import APIRouter
+from ..user_processor import manager
 
 logger = logging.getLogger("brain_services")
 
 router = APIRouter()
-
-_engine = None
-
-
-def set_engine(engine):
-    global _engine
-    _engine = engine
 
 
 class TriggerRequest(BaseModel):
@@ -24,10 +18,8 @@ class TriggerRequest(BaseModel):
 @router.post("/ice-breaker/trigger")
 def trigger_ice_breaker(req: TriggerRequest):
     """手动触发主动发言（测试用）"""
-    if not _engine:
-        return {"code": 503, "message": "引擎未就绪", "data": None}
     try:
-        _engine.generate_and_send(req.user_id, req.wechat_name, req.prompt)
+        manager.generate_and_send(req.user_id, req.wechat_name, req.prompt)
         return {"code": 200, "message": "已触发", "data": {}}
     except Exception as e:
         logger.error("主动发言测试触发失败: %s", e)
