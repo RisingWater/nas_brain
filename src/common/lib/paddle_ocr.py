@@ -67,7 +67,7 @@ def ocr_recognize(image_path: str) -> str:
     return result["text"]
 
 
-def layout_ocr_text(lines: list, gap_factor: float = 1.15) -> str:
+def layout_ocr_text(lines: list, gap_factor: float = 1.15, min_confidence: float = 0) -> str:
     """按 box 坐标重建版面，生成适合 LLM 阅读的多行文本
 
     OCR 服务返回的 text 是按识别顺序拼接的纯文本流，丢失版面信息：
@@ -90,6 +90,7 @@ def layout_ocr_text(lines: list, gap_factor: float = 1.15) -> str:
         lines: PaddleOCR 返回的 lines 字段（嵌套数组）
             [[{"text": "...", "box": {"x","y","width","height"}, "confidence": ...}], ...]
         gap_factor: 区块判定系数（默认 1.15）
+        min_confidence: 置信度阈值，低于该值的识别片段直接丢弃（默认 0 = 不过滤）
 
     Returns:
         重排后的多行文本；lines 为空时返回 ""
@@ -99,8 +100,14 @@ def layout_ocr_text(lines: list, gap_factor: float = 1.15) -> str:
         if isinstance(group, list):
             for it in group:
                 if isinstance(it, dict) and it.get("text") and isinstance(it.get("box"), dict):
+                    conf = it.get("confidence")
+                    if conf is not None and conf < min_confidence:
+                        continue  # 置信度过低，丢弃该片段
                     items.append(it)
         elif isinstance(group, dict) and group.get("text") and isinstance(group.get("box"), dict):
+            conf = group.get("confidence")
+            if conf is not None and conf < min_confidence:
+                continue
             items.append(group)
     if not items:
         return ""

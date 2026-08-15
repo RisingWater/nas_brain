@@ -374,9 +374,10 @@ class StrategyEngine:
             logger.info("OCR 结果: success=%s text=%.100s items=%d", result.get("success"), result.get("text","")[:100], len(result.get("items", [])))
             ocr_text = ""
             if result["success"]:
-                # 优先用坐标重排版面（保留视觉布局，避免 LLM 错误组合相邻字段），
-                # 无坐标时回退到服务端拼接的 text
-                ocr_text = layout_ocr_text(result.get("items")) or result.get("text", "")
+                # 用坐标重排版面（保留视觉布局）+ 置信度过滤：
+                # min_confidence=0.8，低于阈值的噪声文字丢弃。
+                # 过滤后为空则不回退原始 text（含噪声），直接交给多模态 LLM 识别。
+                ocr_text = layout_ocr_text(result.get("items"), min_confidence=0.8)
             if ocr_text:
                 logger.info("OCR 文字识别完成: %.50s", ocr_text)
 
