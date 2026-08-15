@@ -57,7 +57,12 @@ class LLMContextBuilder:
         ctx_parts = []
         if protocol == "wechat":
             if chat_type == "group":
-                ctx_parts.append("你现在在微信群聊中，用户可能 @ 了你。")
+                ctx_parts.append(
+                    "你现在在微信群聊中，用户可能 @ 了你。\n"
+                    "群聊消息格式说明：每条消息以 `[发送者]: 内容` 的形式呈现，"
+                    "方括号内是发送者的名字（与【群成员备注】对应），冒号后才是消息内容。"
+                    "请区分发送者与消息正文，回复时注意消息是谁发的。"
+                )
             else:
                 ctx_parts.append("你现在在微信私聊中。")
             ctx_parts.append(
@@ -131,7 +136,7 @@ class LLMContextBuilder:
         # 5. Current user message
         msg_content = current_msg
         if sender and chat_type == "group":
-            msg_content = f"{sender}: {current_msg}"
+            msg_content = f"[{sender}]: {current_msg}"
         messages.append({"role": "user", "content": msg_content})
 
         return messages
@@ -182,10 +187,10 @@ class LLMContextBuilder:
                         sender = msg_meta.get("sender", "") if isinstance(msg_meta, dict) else ""
                         raw_type = msg_meta.get("raw_chat_type", "") if isinstance(msg_meta, dict) else ""
                         if sender and role == "user":
-                            content = f"{sender}: {content}"
+                            content = f"[{sender}]: {content}"
                         elif role == "user" and raw_type == "group":
                             # 兜底：群聊 sender 缺失（备注为空/老数据）时也标明来源
-                            content = f"群友: {content}"
+                            content = f"[群友]: {content}"
                         entry = {
                             "role": role,
                             "content": content,

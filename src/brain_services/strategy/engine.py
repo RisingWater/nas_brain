@@ -196,10 +196,10 @@ class StrategyEngine:
             sender = (req.metadata or {}).get("sender", "") if hasattr(req, "metadata") else ""
             content = req.content or ""
             if is_group and sender:
-                lines.append(f"{sender}: {content}")
+                lines.append(f"[{sender}]: {content}")
             elif is_group:
                 # 兜底：群聊 sender 缺失（备注为空）时也标明来源
-                lines.append(f"群友: {content}")
+                lines.append(f"[群友]: {content}")
             else:
                 lines.append(content)
             if mid:

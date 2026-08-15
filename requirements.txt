@@ -15,6 +15,7 @@ numpy
 img2pdf
 beautifulsoup4
 python-docx
+pillow
 
 # === Audio ===
 pyaudio
