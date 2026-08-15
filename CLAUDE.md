@@ -89,25 +89,28 @@ if __name__ == "__main__":
 | Web | WEB | smart | 管理后台聊天输入 |
 
 **三种策略：**
-- `smart` — 纯 LLM + 工具调用（不经过 processor）。IMAGE 消息且用户开启 `ocr_image` 时自动 OCR → 存历史 → skip 不回复
+- `smart` — 纯 LLM + 工具调用（不经过 processor）。IMAGE 消息且用户开启 `ocr_image` 时自动图片识别（OCR + 多模态 LLM）→ 存历史 → skip 不回复
 - `direct` — processor 优先处理，无命中则简单兜底回复
 - `ignore` — 只记录聊天数据，不处理
 
-### 智能 OCR
+### 智能图片识别
 
-smart 模式下收到 IMAGE 消息时，若用户配置开启 `ocr_image`：
+smart 模式下收到 IMAGE 消息时，若用户配置开启 `ocr_image`（前端叫「图片自动识别」，同时控制 OCR + 多模态 LLM 两条路径）：
 
 1. 从 wechat_gateway 下载图片
-2. 调用 PaddleOCR Simple Server 识别文字
-3. 用识别结果更新聊天记录的原消息（`UPDATE chat_messages SET content = ? WHERE id = ?`）
-4. 跳过回复（`skipped=True`），用户后续追问时 AI 从聊天历史中获取图片信息
+2. **PaddleOCR** 提取文字（`layout_ocr_text` 按坐标重排版面，`min_confidence=0.8` 丢弃低置信度噪声）
+3. OCR 文字 **>= 20 字** → 直接用作识别结果（主要内容是文字，省一次 LLM 调用）
+4. OCR 文字 **< 20 字**（含空）→ 调用**多模态 LLM**（`image_recognize`，OpenCode Go mimo-v2.5）识别整图内容，OCR 文字作为辅助提示参数传入（「此图片经过 OCR，识别出来的文字是：xxx」）；LLM 失败时回退 OCR 文字
+5. 用识别结果更新聊天记录的原消息（`UPDATE chat_messages SET content = ? WHERE id = ?`，标记【图片识别结果】）
+6. 跳过回复（`skipped=True`），用户后续追问时 AI 从聊天历史中获取图片信息
 
 关键文件：
-- `src/common/lib/paddle_ocr.py` — PaddleOCR 客户端（`PaddleOCR` 类 + `ocr_recognize()` 便捷函数）
-- `src/brain_services/strategy/engine.py` — `_ocr_image()` 方法，process() 中在 smart 路径内调用
-- `.env` — `OCR_SERVER_URL` / `OCR_SERVER_TOKEN` 配置 OCR 服务地址
+- `src/common/lib/paddle_ocr.py` — PaddleOCR 客户端（`PaddleOCR` 类 + `ocr_recognize()` 便捷函数 + `layout_ocr_text()` 版面重排/置信度过滤）
+- `src/common/lib/image_recognize.py` — 多模态 LLM 识别客户端（`ImageRecognizer` 类 + `image_recognize()` 便捷函数，图片压缩长边 1024 + OCR 辅助提示）
+- `src/brain_services/strategy/engine.py` — `_ocr_image()` 方法（OCR → 置信度过滤 → 多模态 LLM 的编排），process()/process_batch() 中在 smart 路径内调用
+- `.env` — `OCR_SERVER_URL` / `OCR_SERVER_TOKEN`（PaddleOCR）；`IMAGE_RECOGNIZE_API_URL` / `IMAGE_RECOGNIZE_API_KEY` / `IMAGE_RECOGNIZE_MODEL_NAME`（多模态 LLM）
 
-processor 模式（direct）下 IMAGE 由处理器自行处理（如 homework 处理器调用百度 OCR），不经过 PaddleOCR。
+processor 模式（direct）下 IMAGE 由处理器自行处理（如 homework 处理器调用百度 OCR），不经过此链路。
 
 ## 三层记忆体系
 
@@ -286,14 +289,14 @@ class MyDetector(BaseDetector):
 批量链路（`engine.py` 的 `process_batch()`，与单条 `process()` 完全独立）：
 
 ```
-逐条记录 → 图片先 OCR（结果写入聊天记录）→ 按 @ 模式分组 → 文字消息合并成一个提示词一次 LLM
+逐条记录 → 图片先识别（OCR + 多模态 LLM，结果写入聊天记录）→ 按 @ 模式分组 → 文字消息合并成一个提示词一次 LLM
 ```
 
 - `group_at_only=True`（默认）：只取 @ 消息构建提示词，非 @ 消息只记录（skip 不回复）
-- `group_at_only=False`：全部可答复消息（文字 + OCR 成功的图片）合并
-- 图片消息不拼进提示词：OCR 结果已写聊天记录，由 context_builder 作为历史注入（因此也不排除）
+- `group_at_only=False`：全部可答复消息（文字 + 识别成功的图片）合并
+- 图片消息不拼进提示词：识别结果已写聊天记录，由 context_builder 作为历史注入（因此也不排除）
 - 批内文字消息用 `exclude_msg_ids` 排除，避免上下文重复
-- 批内无可合并文字（全是图片）→ 全部跳过不回复，与单条链路「图片 OCR 后 skip」一致
+- 批内无可合并文字（全是图片）→ 全部跳过不回复，与单条链路「图片识别后 skip」一致
 - 合并提示词中文字消息带 `sender: 内容` 前缀（群聊 sender 缺失兜底"群友"）
 
 收尾：被合并的从请求打 `merged` 事件 + `skip` 标记（`_mark_merged`）；主请求一次回复并发送。
