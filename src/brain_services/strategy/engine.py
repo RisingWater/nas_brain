@@ -102,16 +102,18 @@ class StrategyEngine:
                 "ignored": True,
             })
 
-        # smart：IMAGE + ocr_image 配置 → OCR 识别，存历史，不回复
+        # smart：IMAGE + 图片自动识别开关（ocr_image）→ 识别图片内容（OCR + 多模态 LLM），存历史，不回复
         if strategy == "smart":
-            if req.content_type == ContentType.IMAGE and req.file_id and config.get("ocr_image"):
+            # 图片自动识别开关：同时控制 PaddleOCR 文字识别 与 多模态 LLM 内容识别（成本低，共用不拆）
+            auto_recognize = config.get("ocr_image")
+            if req.content_type == ContentType.IMAGE and req.file_id and auto_recognize:
                 ocr_text = self._ocr_image(req)
                 if ocr_text:
-                    updated = f"{req.content or ''}\n【OCR识别结果】\n{ocr_text}"
+                    updated = f"{req.content or ''}\n【图片识别结果】\n{ocr_text}"
                     self.recorder.update_content(user_msg_id, updated)
-                    logger.info("图片 OCR 完成，跳过回复: %.50s", ocr_text)
+                    logger.info("图片识别完成，跳过回复: %.50s", ocr_text)
                 else:
-                    logger.info("图片 OCR 无结果，跳过回复")
+                    logger.info("图片识别无结果，跳过回复")
                 return AgentResponse(data={
                     "request_id": req.request_id,
                     "text": "",
@@ -142,9 +144,9 @@ class StrategyEngine:
     def process_batch(self, reqs: list[AgentRequest], config: dict) -> dict:
         """批量链路（smart + wechat 批次，与 process() 单条链路完全独立）
 
-        流程：逐条记录 → 图片 OCR 转文字 → 按 @ 模式分组 → 文字消息合并成
+        流程：逐条记录 → 图片先识别（OCR + 多模态 LLM）→ 按 @ 模式分组 → 文字消息合并成
         一个提示词一次 LLM。合并的纯文字消息在构建上下文时排除（避免重复）；
-        图片消息内容（含 OCR 结果，已写入聊天记录）保留在上下文中由
+        图片消息内容（含识别结果，已写入聊天记录）保留在上下文中由
         context_builder 注入。
 
         两种配置：
@@ -162,16 +164,18 @@ class StrategyEngine:
         is_group = reqs[0].chat_type.value == "group"
         group_at_only = config.get("group_at_only", True)
 
-        # 1. 逐条记录 + 图片先 OCR（smart 模式图片本质是转文字处理）
+        # 1. 逐条记录 + 图片先识别（smart 模式图片本质是转文字处理）
+        #    图片自动识别开关（ocr_image）：同时控制 PaddleOCR 文字识别 与 多模态 LLM 内容识别
+        auto_recognize = config.get("ocr_image")
         items = []  # (req, msg_id, ocr_text)
         for req in reqs:
             msg_id = self.recorder.record_user_message(req)
             ocr_text = ""
             if (req.content_type == ContentType.IMAGE and req.file_id
-                    and config.get("ocr_image")):
+                    and auto_recognize):
                 ocr_text = self._ocr_image(req) or ""
                 if ocr_text:
-                    updated = f"{req.content or ''}\n【OCR识别结果】\n{ocr_text}"
+                    updated = f"{req.content or ''}\n【图片识别结果】\n{ocr_text}"
                     self.recorder.update_content(msg_id, updated)
             items.append((req, msg_id, ocr_text))
 
@@ -206,7 +210,7 @@ class StrategyEngine:
                 exclude_ids.append(mid)
         if not lines:
             # 批内没有可合并的文字（全是图片）→ 全部跳过不回复，
-            # 与单条链路"图片 OCR 后 skip"行为一致（OCR 结果已写入聊天记录）
+            # 与单条链路"图片识别后 skip"行为一致（识别结果已写入聊天记录）
             logger.info("用户 %s 批内无可合并文字，全部跳过 (%d 条)",
                         user_id, len(items))
             return {"resp": None, "actionable": [], "skipped": items}
@@ -332,7 +336,14 @@ class StrategyEngine:
         })
 
     def _ocr_image(self, req: AgentRequest) -> str | None:
-        """下载图片并 OCR，返回识别文本"""
+        """下载图片并识别内容（OCR + 多模态 LLM），返回识别文本
+
+        流程：
+        1. PaddleOCR 提取文字（带版面重排）
+        2. OCR 文字 >= 20 字 → 直接返回（图文内容主要是文字，OCR 已够用，省一次 LLM）
+        3. OCR 文字 < 20 字（含无文字）→ 多模态 LLM 识别整图内容，
+           OCR 文字作为辅助提示参数传入（帮助模型理解）
+        """
         import shutil
         import tempfile
         import requests as _req
@@ -344,10 +355,10 @@ class StrategyEngine:
             dl_url = _cfg.get_service_url("wechat_gateway", f"/api/gateway/files/{req.file_id}/download")
             resp = _req.get(dl_url, timeout=30)
             if resp.status_code != 200:
-                logger.warning("OCR 下载图片失败: HTTP %s", resp.status_code)
+                logger.warning("图片下载失败: HTTP %s", resp.status_code)
                 return None
         except Exception as e:
-            logger.warning("OCR 下载图片异常: %s", e)
+            logger.warning("图片下载异常: %s", e)
             return None
 
         tmpdir = tempfile.mkdtemp()
@@ -356,21 +367,41 @@ class StrategyEngine:
             with open(img_path, "wb") as f:
                 f.write(resp.content)
 
+            # 1. PaddleOCR 提取文字（带版面重排）
             from src.common.lib.paddle_ocr import PaddleOCR, layout_ocr_text
             ocr = PaddleOCR()
             result = ocr.recognize(img_path)
             logger.info("OCR 结果: success=%s text=%.100s items=%d", result.get("success"), result.get("text","")[:100], len(result.get("items", [])))
+            ocr_text = ""
             if result["success"]:
                 # 优先用坐标重排版面（保留视觉布局，避免 LLM 错误组合相邻字段），
                 # 无坐标时回退到服务端拼接的 text
                 ocr_text = layout_ocr_text(result.get("items")) or result.get("text", "")
-                if ocr_text:
-                    logger.info("OCR 识别完成: %.50s", ocr_text)
-                    return ocr_text
-            logger.info("OCR 未识别到文字")
+            if ocr_text:
+                logger.info("OCR 文字识别完成: %.50s", ocr_text)
+
+            # 2. OCR 文字 >= 20 字 → 直接返回（主要内容是文字，无需再走 LLM）
+            if len(ocr_text) >= 20:
+                logger.info("OCR 文字充足（%d 字），直接使用", len(ocr_text))
+                return ocr_text
+
+            # 3. OCR 文字 < 20 字（或无文字）→ 多模态 LLM 识别整图内容，
+            #    OCR 文字作为辅助提示参数传入
+            logger.info("OCR 文字不足（%d 字），调用多模态 LLM 识别", len(ocr_text))
+            from src.common.lib.image_recognize import get_image_recognizer
+            llm = get_image_recognizer().recognize(img_path, ocr_text=ocr_text)
+            if llm["success"] and llm["text"]:
+                logger.info("多模态 LLM 识别完成: %.50s", llm["text"])
+                return llm["text"]
+
+            # 4. LLM 识别失败 → 回退到 OCR 文字（哪怕不足 20 字）
+            if ocr_text:
+                logger.info("多模态 LLM 识别失败，回退 OCR 文字: %.50s", ocr_text)
+                return ocr_text
+            logger.info("图片识别无结果")
             return None
         except Exception as e:
-            logger.warning("OCR 处理异常: %s", e)
+            logger.warning("图片识别处理异常: %s", e)
             return None
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)

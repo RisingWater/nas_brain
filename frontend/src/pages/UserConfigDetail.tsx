@@ -235,8 +235,8 @@ export default function UserConfigDetail() {
         <Switch />
       </Form.Item>
 
-      <Form.Item name="ocr_image" label="图片自动 OCR 识别" valuePropName="checked"
-                 tooltip="收到图片时自动识别其中的文字，结果补充到消息内容中">
+      <Form.Item name="ocr_image" label="图片自动识别" valuePropName="checked"
+                 tooltip="收到图片时自动识别内容（文字 OCR + LLM 识别），结果补充到消息内容中">
         <Switch />
       </Form.Item>
 
