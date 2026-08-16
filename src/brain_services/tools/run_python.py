@@ -64,14 +64,20 @@ class RunPythonTool(BaseTool):
             stderr = result.stderr.strip()
             returncode = result.returncode
 
-            # 收集执行后在 TEMP_DIR 生成的文件（排除 .py 自身）
+            # 收集执行后在 TEMP_DIR 生成的文件（递归子目录，排除 .py 脚本自身）
+            # 注意：脚本 cwd 就是 TEMP_DIR，且 TEMP_DIR 也传给子进程环境变量，
+            # 脚本可能用相对路径写文件，也可能用 os.path.join(TEMP_DIR, f) 多嵌套一层，
+            # 两种写法都要能收集到。
             generated = []
-            for fname in os.listdir(_TEMP_DIR):
-                if fname.startswith("_run_") or fname == os.path.basename(script_path):
-                    continue
-                fpath = os.path.join(_TEMP_DIR, fname)
-                if os.path.isfile(fpath) and os.path.getmtime(fpath) >= os.path.getmtime(script_path):
-                    generated.append(fpath)
+            script_mtime = os.path.getmtime(script_path)
+            for root, dirs, files in os.walk(_TEMP_DIR):
+                dirs[:] = [d for d in dirs if not d.startswith("_run_")]
+                for fname in files:
+                    fpath = os.path.join(root, fname)
+                    if fname.startswith("_run_") or fname == os.path.basename(script_path):
+                        continue
+                    if os.path.getmtime(fpath) >= script_mtime:
+                        generated.append(fpath)
 
             # 组装回复
             parts = []

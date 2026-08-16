@@ -17,7 +17,7 @@ _DUMP = os.getenv("BRAIN_SERVICE_DUMP_MSG")
 class LLMHandler:
     """执行 LLM + 工具调用的函数调用循环"""
 
-    MAX_ITERATIONS = 10  # 防止工具调用死循环
+    MAX_ITERATIONS = 50  # 防止工具调用死循环
 
     def __init__(self):
         self.deepseek = DeepSeekAPI()
