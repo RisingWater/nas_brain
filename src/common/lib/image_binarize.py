@@ -31,18 +31,24 @@ class ImageBinarrize:
             _, binary = cv2.threshold(image, threshold, 255, cv2.THRESH_BINARY)
         return binary
 
-    def process_image(self, input_path, output_path):
+    def process_image(self, input_path, output_path, threshold=192, remove_shadow=True, invert=False):
         final_result, _ = self.process_pipeline(
             input_path, kernel_size=601, contrast=2.0, brightness=10,
-            binarize=True, threshold=192, invert=False,
+            binarize=True, threshold=threshold, invert=invert, remove_shadow=remove_shadow,
         )
         cv2.imwrite(output_path, final_result)
 
     def process_pipeline(self, img_path, kernel_size=601, contrast=2.0, brightness=10,
-                         binarize=True, threshold=160, invert=False):
-        enhanced, shadow_removed, original = self.remove_shadows_simple_contrast(
-            img_path, kernel_size, contrast, brightness
-        )
+                         binarize=True, threshold=160, invert=False, remove_shadow=True):
+        if remove_shadow:
+            enhanced, shadow_removed, original = self.remove_shadows_simple_contrast(
+                img_path, kernel_size, contrast, brightness
+            )
+        else:
+            img = cv2.imread(img_path)
+            if img is None:
+                raise ValueError(f"无法读取图像: {img_path}")
+            enhanced = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         final_result = enhanced
         if binarize:
             final_result = self.binarize_image(enhanced, threshold, invert)

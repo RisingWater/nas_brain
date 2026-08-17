@@ -48,18 +48,30 @@ class Printer:
             return False, str(e)
 
     def get_job_status(self, job_id: str) -> dict:
-        """查询打印任务状态"""
+        """查询打印任务状态，返回 {"state_name": "...", ...}
+
+        state_name 为 CUPS 状态码的语义名称：
+        pending / held / processing / stopped / canceled / aborted / completed / unknown
+        """
         if not self._conn:
             return {"state_name": "unknown"}
+        state_map = {
+            3: "pending",
+            4: "held",
+            5: "processing",
+            6: "stopped",
+            7: "canceled",
+            8: "aborted",
+            9: "completed",
+        }
         try:
-            jobs = self._conn.getJobs()
-            for jid, attrs in jobs.items():
-                if str(jid) == job_id:
-                    return {
-                        "job_id": jid,
-                        "state_name": attrs.get("job-state", ""),
-                        "state_reasons": attrs.get("job-state-reasons", ""),
-                    }
-            return {"job_id": job_id, "state_name": "completed"}
+            attrs = self._conn.getJobAttributes(int(job_id))
+            state = attrs.get("job-state", -1)
+            return {
+                "job_id": job_id,
+                "state_name": state_map.get(state, "unknown"),
+                "state": state,
+                "state_reasons": attrs.get("job-state-reasons", ""),
+            }
         except Exception as e:
-            return {"state_name": "error", "error": str(e)}
+            return {"job_id": job_id, "state_name": "unknown", "error": str(e)}
