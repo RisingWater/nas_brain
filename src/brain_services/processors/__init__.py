@@ -125,10 +125,21 @@ class ProcessorRegistry:
             for p in self._processors.values()
         ]
 
-    def find_handler(self, req: AgentRequest) -> tuple[Optional[BaseProcessor], Optional[ProcessorContext]]:
-        """按 priority 遍历，返回第一个 can_handle 的 (processor, context)"""
+    def find_handler(self, req: AgentRequest,
+                     allowed: Optional[list[str]] = None) -> tuple[Optional[BaseProcessor], Optional[ProcessorContext]]:
+        """按 priority 遍历，返回第一个 can_handle 的 (processor, context)
+
+        Args:
+            req: 请求
+            allowed: 用户配置的处理器白名单（None=全部允许，[]=禁用全部，列表=仅指定）
+        """
         ctx = ProcessorContext(req)
+        if allowed is not None and not allowed:
+            return None, ctx
+        allowed_set = set(allowed) if allowed is not None else None
         for p in self.get_sorted():
+            if allowed_set is not None and p.name not in allowed_set:
+                continue
             try:
                 if p.can_handle(req):
                     return p, ctx

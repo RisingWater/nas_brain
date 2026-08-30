@@ -121,8 +121,8 @@ class StrategyEngine:
                 })
             return self._process_smart(req, config, user_msg_id)
 
-        # direct：processor 优先，无命中则简单兜底
-        processor, ctx = proc_registry.find_handler(req)
+        # direct：processor 优先，无命中则简单兜底（按用户白名单 allowed_processors 过滤）
+        processor, ctx = proc_registry.find_handler(req, config.get("allowed_processors"))
         if processor:
             logger.info("Processor %s 处理请求", processor.name)
             try:
