@@ -94,6 +94,8 @@ class PrintProcessor(BaseProcessor):
 
                 if params["type"] == "document":
                     # 手拍文档：有阴影先去阴影，再按 LLM 阈值二值化
+                    logger.info("图片判定为手拍文档，二值化处理（去阴影=%s, 阈值=%s, 反色=%s）",
+                                params["has_shadow"], params["threshold"], params["invert"])
                     binarized = os.path.join(tmpdir, "binarized_" + file_name)
                     binarizer = ImageBinarrize()
                     binarizer.process_image(
@@ -143,7 +145,9 @@ class PrintProcessor(BaseProcessor):
         """
         text = ""
         try:
+            t0 = time.monotonic()
             result = get_image_recognizer().recognize(image_path, prompt=_CLASSIFY_PROMPT)
+            logger.info("图片分类 LLM 调用完成，耗时 %.1fs", time.monotonic() - t0)
             if not result["success"]:
                 logger.warning("图片分类识别失败: %s", result.get("error"))
                 return None
@@ -158,12 +162,15 @@ class PrintProcessor(BaseProcessor):
             if img_type not in ("screenshot", "document", "photo"):
                 logger.warning("图片类型不合法: %r", img_type)
                 return None
-            return {
+            params = {
                 "type": img_type,
                 "has_shadow": self._parse_bool(data.get("has_shadow", False)),
                 "threshold": int(data.get("threshold", 192)),
                 "invert": self._parse_bool(data.get("invert", False)),
             }
+            logger.info("图片分类完成: type=%s, has_shadow=%s, threshold=%s, invert=%s",
+                        params["type"], params["has_shadow"], params["threshold"], params["invert"])
+            return params
         except Exception as e:
             logger.warning("图片分类 JSON 解析失败: %s (text=%r)", e, text)
             return None
@@ -205,3 +212,45 @@ if sys.platform != "win32":
     registry.register(PrintProcessor())
 else:
     logger.info("Windows 平台，跳过注册 print processor")
+
+
+if __name__ == "__main__":
+    # 本地测试入口（Windows 可跑）：仅测 mimo 图片分类，不打印
+    # 用法: python -m src.brain_services.processors.print <图片路径> [更多图片路径...]
+    import importlib
+    import logging
+
+    # image_recognize 的配置在模块导入时读取，这里加载 .env 后重载使其生效
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    import src.common.lib.image_recognize as _ir
+    importlib.reload(_ir)
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+    if len(sys.argv) < 2:
+        print("用法: python -m src.brain_services.processors.print <图片路径> [更多图片路径...]")
+        sys.exit(1)
+
+    _DECISION = {
+        "screenshot": "截图 → 直接打印",
+        "photo": "普通照片 → 直接打印",
+        "document": "手拍文档 → 二值化后打印",
+    }
+
+    _proc = PrintProcessor()
+    for _path in sys.argv[1:]:
+        print(f"\n=== 分类: {_path} ===")
+        _t0 = time.monotonic()
+        _params = _proc._classify_image(_path)
+        _dt = time.monotonic() - _t0
+        if _params is None:
+            print(f"✗ 分类失败（原因见上方日志），耗时 {_dt:.1f}s")
+        else:
+            print(json.dumps(_params, ensure_ascii=False, indent=2))
+            print(f"→ {_DECISION[_params['type']]}")
+            print(f"✓ 耗时 {_dt:.1f}s")
