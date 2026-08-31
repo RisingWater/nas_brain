@@ -1,11 +1,54 @@
 """文件读写工具 — 在 TEMP_DIR 内读写文件，支持 txt/pdf"""
+import glob
 import os
+import sys
 import logging
 from . import BaseTool, registry
 
 logger = logging.getLogger("brain_services.tools.write_file")
 
 _TEMP_DIR = os.path.normpath(os.getenv("TEMP_DIR", "data"))
+
+# CJK 字体文件名匹配模式（用于扫描系统字体目录）
+_CJK_FONT_PATTERNS = [
+    "*NotoSansCJK*", "*NotoSansSC*", "*SourceHanSans*",
+    "wqy*", "WenQuanYi*", "*DroidSansFallback*",
+    "*simhei*", "*msyh*", "*ukai*", "*uming*",
+]
+
+# 解析缓存：None=未扫描，""=扫描过但无可加载字体，其他=可用字体路径
+_CJK_FONT_RESOLVED: str | None = None
+
+
+def _linux_cjk_fonts() -> list[str]:
+    """扫描 Linux 常见字体目录，返回 CJK 字体路径（ttf/otf 优先于 ttc）"""
+    hits: list[str] = []
+    for root in ("/usr/share/fonts", "/usr/local/share/fonts",
+                 os.path.expanduser("~/.fonts")):
+        if not os.path.isdir(root):
+            continue
+        for ext in ("ttf", "otf", "ttc"):
+            for pat in _CJK_FONT_PATTERNS:
+                hits.extend(glob.glob(
+                    os.path.join(root, "**", f"{pat}.{ext}"), recursive=True))
+    # 去重保序
+    seen: set[str] = set()
+    return [p for p in hits if not (p in seen or seen.add(p))]
+
+
+def _cjk_font_candidates() -> list[str]:
+    """按优先级组装 CJK 字体候选路径"""
+    cands = [
+        os.getenv("PDF_FONT_PATH", ""),
+        os.path.join(_TEMP_DIR, "NotoSansSC-Regular.otf"),
+        os.path.join(_TEMP_DIR, "fonts", "NotoSansSC-Regular.otf"),
+    ]
+    if sys.platform.startswith("linux"):
+        cands += _linux_cjk_fonts()
+        cands.append("/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf")
+    else:
+        cands += [r"C:\Windows\Fonts\simhei.ttf", r"C:\Windows\Fonts\msyh.ttc"]
+    return [c for c in cands if c]
 
 # PDF 写入支持（可选依赖 fpdf2）
 _HAS_FPDF = False
@@ -34,6 +77,30 @@ def _safe_path(filename: str) -> str:
     if not full.startswith(_TEMP_DIR):
         raise ValueError("不允许访问 TEMP_DIR 以外的文件")
     return full
+
+
+def _cjk_font_path() -> str:
+    """解析并缓存第一个可加载的 CJK 字体路径（每次进程只扫描一次）"""
+    global _CJK_FONT_RESOLVED
+    if _CJK_FONT_RESOLVED is not None:
+        return _CJK_FONT_RESOLVED
+    if not _HAS_FPDF:
+        _CJK_FONT_RESOLVED = ""
+        return ""
+    for path in _cjk_font_candidates():
+        try:
+            # 用一次性 FPDF 实际验证字体可加载（排除损坏/不兼容文件）
+            pdf = FPDF()
+            pdf.add_font("cjk", "", path)
+            _CJK_FONT_RESOLVED = path
+            logger.info("PDF 中文字体: %s", path)
+            break
+        except Exception as e:
+            logger.debug("字体不可加载 %s: %s", path, e)
+    else:
+        _CJK_FONT_RESOLVED = ""
+        logger.warning("未找到可用的 CJK 字体，write_pdf_file 不支持中文")
+    return _CJK_FONT_RESOLVED
 
 
 class WriteTextFileTool(BaseTool):
@@ -127,27 +194,39 @@ class WritePdfFileTool(BaseTool):
         if not filename.endswith(".pdf"):
             filename += ".pdf"
 
+        # 字体选择：优先 CJK 字体（支持中文）；无中文且纯 ASCII 可用内置 helvetica
+        font_path = _cjk_font_path()
+        if not font_path and not content.isascii():
+            return {"text": "生成 PDF 失败：未找到中文字体（可配置 PDF_FONT_PATH 环境变量，"
+                            "或将 NotoSansSC-Regular.otf 放入临时文件目录）", "files": []}
+
         try:
             filepath = _safe_path(filename)
             pdf = FPDF()
             pdf.add_page()
+            if font_path:
+                pdf.add_font("cjk", "", font_path)
+                pdf.add_font("cjk", "B", font_path)
+                title_font = ("cjk", "B")
+                body_font = ("cjk", "")
+            else:
+                title_font = ("helvetica", "B")
+                body_font = ("helvetica", "")
             if title:
-                pdf.set_font("helvetica", "B", 16)
-                pdf.cell(0, 10, title, new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font(*title_font, 16)
+                pdf.multi_cell(0, 10, title, new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(5)
-            pdf.set_font("helvetica", "", 12)
+            pdf.set_font(*body_font, 12)
             for line in content.split("\n"):
-                line = line.strip()
+                line = line.rstrip()
                 if line:
-                    try:
-                        pdf.cell(0, 8, line, new_x="LMARGIN", new_y="NEXT")
-                    except Exception:
-                        safe = line.encode("utf-8", errors="ignore").decode("utf-8")
-                        pdf.cell(0, 8, safe, new_x="LMARGIN", new_y="NEXT")
+                    # multi_cell 自动换行（长行/中文均安全）
+                    pdf.multi_cell(0, 8, line, new_x="LMARGIN", new_y="NEXT")
                 else:
                     pdf.ln(4)
             pdf.output(filepath)
-            logger.info("PDF 文件已保存: %s (%d 字)", filepath, len(content))
+            logger.info("PDF 文件已保存: %s (%d 字, 字体=%s)",
+                        filepath, len(content), font_path or "helvetica")
             return {"text": f"PDF 已保存：{filename}", "files": [filepath]}
         except Exception as e:
             logger.error("生成 PDF 失败: %s", e)
