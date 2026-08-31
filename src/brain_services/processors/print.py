@@ -117,6 +117,18 @@ class PrintProcessor(BaseProcessor):
                 ctx.reply(f"不支持的文件格式: {ext}")
                 return {"reply": f"不支持的文件格式: {ext}"}
 
+            # FILE 链路统一去字体：部分打印机内置 PDF 解释器不支持内嵌
+            # CJK 字体，直接打印文字版 PDF 会乱码。
+            # 优先 gs 轮廓化（矢量，打印速度同文字版）；gs 缺失/失败回退栅格化
+            if req.content_type == ContentType.FILE:
+                try:
+                    pdf_path = converter.flatten_pdf_fonts(pdf_path, tmpdir)
+                    logger.info("打印链路: gs 字体轮廓化")
+                except Exception as e:
+                    logger.warning("gs 轮廓化失败，回退栅格化: %s", e)
+                    pdf_path = converter.rasterize_pdf(pdf_path, tmpdir)
+                    logger.info("打印链路: 栅格化兜底")
+
             success, job_id = printer.print_pdf(pdf_path)
             if success:
                 ctx.reply(f"打印任务已创建: {job_id}")

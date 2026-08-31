@@ -20,9 +20,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg sox libasound2-dev portaudio19-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# CUPS 打印
+# CUPS 打印（ghostscript 用于打印前字体轮廓化，防打印机 CJK 乱码）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cups cups-client printer-driver-hpcups libcups2-dev \
+    cups cups-client printer-driver-hpcups libcups2-dev ghostscript \
     && rm -rf /var/lib/apt/lists/*
 
 # LibreOffice（大包，不需要时可注释）
