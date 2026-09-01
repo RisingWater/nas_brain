@@ -328,11 +328,12 @@ class StrategyEngine:
         })
 
     def _process_direct(self, req: AgentRequest) -> AgentResponse:
-        """Direct 模式：processor 未命中时的简单回复"""
+        """Direct 模式：processor 未命中时跳过不回复"""
+        logger.info("Direct 模式 processor 未命中，跳过回复")
         return AgentResponse(data={
             "request_id": req.request_id,
-            "text": f"已收到你的消息：{req.content or ''}",
-            "received": True,
+            "text": "",
+            "skipped": True,
         })
 
     def _ocr_image(self, req: AgentRequest) -> str | None:
