@@ -159,6 +159,9 @@ processor 模式（direct）下 IMAGE 由处理器自行处理（如 homework �
 | rss_news | RSS 新闻资讯查询（今日时政要闻/股市财经） | | |
 | search_chat_history | 搜索聊天记录 | ✅ | |
 | run_python | 执行 Python 代码 | | ✅ |
+| search_papers | 试卷库查找/筛选（年份/科目/地市/考试/类型/关键字） | | |
+| download_paper | 按 ID 下载试卷文件并发送 | | ✅ |
+| upload_paper | 上传临时目录文件到试卷库 | | ✅ |
 
 **final 工具**：执行后直接返回结果，不送回 LLM 继续处理，但在上下文中插入假响应保持链路完整。
 
