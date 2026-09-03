@@ -192,55 +192,88 @@ class SearchPapersTool(BaseTool):
 
 
 class DownloadPaperTool(BaseTool):
-    """按 ID 下载试卷文件并发送"""
+    """按 ID 批量下载试卷文件并发送"""
+
+    _MAX = 10  # 单次最多下载份数
 
     def __init__(self):
         super().__init__(
             name="download_paper",
             display_name="下载试卷",
             description=(
-                "按 ID 下载试卷文件并发送给用户。ID 需先通过 search_papers 查询获得"
-                "（列表中每项的 [ID]）。用户想要试卷文件时调用此工具。"
+                "按 ID 下载试卷文件并发送给用户，支持一次传多个 ID 批量下载（最多 10 份）。"
+                "ID 需先通过 search_papers 查询获得（列表中每项的 [ID]）。"
+                "用户想要试卷文件时调用此工具。"
             ),
             parameters={
                 "type": "object",
                 "properties": {
-                    "id": {
-                        "type": "integer",
-                        "description": "试卷 ID（search_papers 结果中的 [ID]）",
+                    "ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "试卷 ID 列表（search_papers 结果中的 [ID]），如 [12, 15]",
                     },
                 },
-                "required": ["id"],
+                "required": ["ids"],
             },
-            final=True,
         )
 
     def execute(self, args: dict) -> dict:
-        paper_id = args.get("id")
-        if not paper_id:
+        raw = args.get("ids")
+        if raw is None:
+            raw = args.get("id")  # 兼容旧单 ID 参数
+        if raw is None:
+            return {"text": "请提供试卷 ID（先用 search_papers 查找）", "files": []}
+        if isinstance(raw, (int, str)):
+            raw = [raw]
+
+        ids = []
+        for v in raw:
+            try:
+                pid = int(str(v).strip())
+            except (ValueError, TypeError):
+                continue
+            if pid > 0:
+                ids.append(pid)
+        ids = list(dict.fromkeys(ids))[:self._MAX]
+        if not ids:
             return {"text": "请提供试卷 ID（先用 search_papers 查找）", "files": []}
 
-        try:
-            resp = requests.get(
-                f"{_base_url()}/api/documents/{paper_id}/download",
-                stream=True, timeout=120)
-            if resp.status_code == 404:
-                return {"text": f"试卷 {paper_id} 不存在或文件已被删除", "files": []}
-            resp.raise_for_status()
-            filename = _filename_from_disposition(
-                resp.headers.get("Content-Disposition", ""),
-                f"paper_{paper_id}.pdf")
-            filepath = _safe_path(filename)
-            with open(filepath, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=64 * 1024):
-                    if chunk:
-                        f.write(chunk)
-            logger.info("试卷已下载: id=%s -> %s (%.1f KB)",
-                        paper_id, filepath, os.path.getsize(filepath) / 1024)
-            return {"text": f"已找到：{filename}", "files": [filepath]}
-        except requests.RequestException as e:
-            logger.error("下载试卷失败: %s", e)
-            return {"text": f"下载试卷失败: {e}", "files": []}
+        files = []
+        ok_names = []
+        errors = []
+        for paper_id in ids:
+            try:
+                resp = requests.get(
+                    f"{_base_url()}/api/documents/{paper_id}/download",
+                    stream=True, timeout=120)
+                if resp.status_code == 404:
+                    errors.append(f"试卷 {paper_id} 不存在或文件已被删除")
+                    continue
+                resp.raise_for_status()
+                filename = _filename_from_disposition(
+                    resp.headers.get("Content-Disposition", ""),
+                    f"paper_{paper_id}.pdf")
+                filepath = _safe_path(filename)
+                with open(filepath, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=64 * 1024):
+                        if chunk:
+                            f.write(chunk)
+                logger.info("试卷已下载: id=%s -> %s (%.1f KB)",
+                            paper_id, filepath, os.path.getsize(filepath) / 1024)
+                files.append(filepath)
+                ok_names.append(filename)
+            except requests.RequestException as e:
+                logger.error("下载试卷失败: id=%s, %s", paper_id, e)
+                errors.append(f"试卷 {paper_id} 下载失败")
+
+        parts = []
+        if files:
+            parts.append(f"已下载 {len(files)} 份：{'、'.join(ok_names)}")
+        if errors:
+            parts.append("；".join(errors))
+        text = "\n".join(parts) if parts else "下载失败"
+        return {"text": text, "files": files}
 
 
 class UploadPaperTool(BaseTool):
