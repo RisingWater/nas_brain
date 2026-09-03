@@ -160,6 +160,7 @@ class UserProcessor:
 
     def _process_single(self, req: AgentRequest):
         """单条完整链路：追踪 → engine.process（记录/OCR/策略分流全流程）→ 收尾"""
+        logger.info("[DEBUG] _process_single 入口 metadata: %s", dict(req.metadata or {}))
         trace_event(req.request_id, "brain_receive",
                     protocol=req.protocol.value, user_id=req.user_id,
                     metadata={"content": req.content or ""})

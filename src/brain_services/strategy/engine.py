@@ -83,6 +83,8 @@ class StrategyEngine:
         """
         config = self.get_user_config(req.user_id)
         user_msg_id = self.recorder.record_user_message(req)
+        logger.info("[DEBUG] engine.process metadata=%s user_msg_id=%s",
+                    dict(req.metadata or {}), user_msg_id)
 
         # 检查是否跳过（群聊无 @）
         if self.should_skip(req, config):
@@ -253,6 +255,8 @@ class StrategyEngine:
 
         # 构建上下文（合并文本已带 sender 前缀，不再重复加）
         sender = (req.metadata or {}).get("sender", "") if hasattr(req, 'metadata') else ""
+        logger.info("[DEBUG] _process_smart 构建 context 前: sender=%r, current_msg=%.60s, exclude_msg_ids=%s, content_override=%r",
+                    sender, current_msg, exclude_msg_ids, content_override)
         messages = self.context_builder.build(
             user_id=req.user_id,
             config=config,

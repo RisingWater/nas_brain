@@ -145,6 +145,7 @@ class WeChatProcessor:
         agent_req = self._build_agent_request(user, msg)
         if not agent_req:
             return
+        logger.info("[DEBUG] gateway 转发 metadata=%s", dict(agent_req.metadata or {}))
 
         logger.info("转发消息 user=%s type=%s len=%d",
                      user["user_id"], agent_req.content_type.value, len(agent_req.content))
