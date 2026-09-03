@@ -95,11 +95,11 @@ class LLMContextBuilder:
             for m in members:
                 if not isinstance(m, dict):
                     continue
-                sender = (m.get("sender") or "").strip()
-                if not sender:
+                m_sender = (m.get("sender") or "").strip()
+                if not m_sender:
                     continue
                 remark = (m.get("remark") or "").strip()
-                m_lines.append(f"{sender}: {remark}" if remark else sender)
+                m_lines.append(f"{m_sender}: {remark}" if remark else m_sender)
             if m_lines:
                 messages.append({
                     "role": "system",

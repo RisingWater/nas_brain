@@ -22,7 +22,6 @@ async def receive_request(req: AgentRequest):
     """接收 AgentRequest，入队到用户处理器，立即返回"""
     logger.info("收到请求: id=%s user=%s type=%s content=%.50s",
                 req.request_id, req.user_id, req.content_type.value, req.content or "")
-    logger.info("[DEBUG] agent.py 收到 metadata: %s", dict(req.metadata or {}))
 
     # 入队（同一用户的消息由 UserProcessor 处理线程串行处理）
     manager.get_processor(req.user_id).enqueue(req)
